@@ -21,6 +21,7 @@ export function fakePlatform(): PlatformAdapter {
     listDir: unused,
     readTextFile: unused,
     writeTextFile: unused,
+    writeBinaryFile: unused,
     createDir: unused,
     renamePath: unused,
     removePath: unused,

@@ -1,7 +1,7 @@
 import { useEditor, useSettings, useUi, type OpenDocument } from "@newmd/core";
 import { createMarkdownEditor, type MarkdownSurface } from "@newmd/core/editor";
 import { useEffect, useRef, useState } from "react";
-import { handleNewDocument, handleOpenFile, handleOpenFolder } from "../actions";
+import { errorMessage, handleNewDocument, handleOpenFile, handleOpenFolder } from "../actions";
 import { useT } from "../hooks/useT";
 import { FindReplace } from "./FindReplace";
 
@@ -65,6 +65,9 @@ export function EditorPane() {
   const spellcheck = useSettings((s) => s.settings.spellcheck);
   const mode = useUi((s) => s.mode);
   const reveal = useUi((s) => s.reveal);
+  // `t` resolves the locale when it is called, not when it is read here, so a
+  // toast raised long after this render still comes out in the current one.
+  const t = useT();
   /** Once a surface exists to carry the jump. */
   const [mounted, setMounted] = useState(false);
 
@@ -88,6 +91,21 @@ export function EditorPane() {
       doc: initial,
       spellcheck: useSettings.getState().settings.spellcheck,
       mode: useUi.getState().mode,
+      // Read per paste rather than captured here: this surface outlives tab
+      // switches, and a screenshot must not land in the folder of whichever
+      // document was open when the editor booted (ADR-0001 §2.8).
+      imageTarget() {
+        const current = useEditor.getState().doc;
+        if (!current?.path) return null;
+        return { docPath: current.path, dirName: useSettings.getState().settings.imageDirName };
+      },
+      // The paste has already been claimed by the time this runs, so without
+      // it a failed write would take the picture with it and say nothing.
+      onImageError(error) {
+        useUi
+          .getState()
+          .notify("error", t("editor.imagePasteFailed", { message: errorMessage(error) }));
+      },
       onChange(text) {
         lastEmittedRef.current = text;
         useEditor.getState().updateContent(text);

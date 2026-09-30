@@ -43,6 +43,7 @@
   },
   "editor": {
     "emptyHint": "从文件夹打开 Markdown 文件，或新建文档。",
+    "imagePasteFailed": "图片保存失败：{{message}}",
     "newDocument": "新建文档",
     "noFile": "未打开文件",
     "openFile": "打开文件…",

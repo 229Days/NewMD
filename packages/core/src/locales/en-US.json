@@ -43,6 +43,7 @@
   },
   "editor": {
     "emptyHint": "Open a Markdown file from a folder, or start a new document.",
+    "imagePasteFailed": "Could not save the image: {{message}}",
     "newDocument": "New document",
     "noFile": "No file open",
     "openFile": "Open file…",

@@ -38,6 +38,7 @@ function fakePlatform(): { adapter: PlatformAdapter; files: Map<string, string> 
       files.set(path, content);
       return { path, modifiedAt: 2 };
     },
+    writeBinaryFile: unused,
     createDir: unused,
     renamePath: unused,
     removePath: unused,

@@ -12,6 +12,7 @@ pub fn run() {
             commands::fs::list_dir,
             commands::fs::read_text_file,
             commands::fs::write_text_file,
+            commands::fs::write_binary_file,
             commands::fs::create_dir,
             commands::fs::rename_path,
             commands::fs::remove_path,

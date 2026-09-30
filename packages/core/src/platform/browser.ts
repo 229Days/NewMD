@@ -26,7 +26,10 @@ interface FsHandle {
 interface FsFileHandle extends FsHandle {
   kind: "file";
   getFile(): Promise<File>;
-  createWritable(): Promise<{ write(data: string): Promise<void>; close(): Promise<void> }>;
+  createWritable(): Promise<{
+    write(data: string | ArrayBuffer | ArrayBufferView): Promise<void>;
+    close(): Promise<void>;
+  }>;
 }
 interface FsDirHandle extends FsHandle {
   kind: "directory";
@@ -87,14 +90,21 @@ export function createBrowserAdapter(): PlatformAdapter {
     return { handle, segments: parts.slice(1) };
   }
 
-  async function resolveFile(virtualPath: string): Promise<FsFileHandle> {
+  /**
+   * Find the handle for `virtualPath`, creating the file when a writer asks.
+   *
+   * `create` belongs to the write path and not the read path: a pasted image
+   * names a file that has never existed, and `getFileHandle` without `create`
+   * throws NotFoundError rather than making it.
+   */
+  async function resolveFile(virtualPath: string, create = false): Promise<FsFileHandle> {
     const known = files.get(virtualPath);
     if (known) return known;
     const parentPath = virtualPath.split("/").slice(0, -1).join("/");
     const name = virtualPath.split("/").pop();
     if (!name) throw new PlatformError(`Invalid file path: ${virtualPath}`);
     const { handle: dir } = await resolveDir(parentPath);
-    const file = await dir.getFileHandle(name);
+    const file = await dir.getFileHandle(name, create ? { create: true } : undefined);
     files.set(virtualPath, file);
     return file;
   }
@@ -183,9 +193,17 @@ export function createBrowserAdapter(): PlatformAdapter {
     },
 
     async writeTextFile(path: string, content: string): Promise<WriteResult> {
-      const handle = await resolveFile(path);
+      const handle = await resolveFile(path, true);
       const writable = await handle.createWritable();
       await writable.write(content);
+      await writable.close();
+      return { path, modifiedAt: Date.now() };
+    },
+
+    async writeBinaryFile(path: string, bytes: Uint8Array): Promise<WriteResult> {
+      const handle = await resolveFile(path, true);
+      const writable = await handle.createWritable();
+      await writable.write(bytes);
       await writable.close();
       return { path, modifiedAt: Date.now() };
     },

@@ -10,6 +10,8 @@
  * That is also why spellcheck is a method rather than a DOM lookup: the
  * contenteditable a caller would poke at has a different class in each engine.
  */
+import type { ImageTarget } from "./paste-image";
+
 export interface MarkdownEditorOptions {
   /** Element to mount the editing surface into. */
   parent: HTMLElement;
@@ -21,6 +23,21 @@ export interface MarkdownEditorOptions {
   spellcheck?: boolean;
   /** Surface to start in. WYSIWYG is the default (ADR-0001 §2.2). */
   mode?: MarkdownEditorMode;
+  /**
+   * Where a pasted image may be written, or null when the buffer has never
+   * been saved and there is no directory to write it beside (ADR-0001 §2.8).
+   *
+   * A getter rather than a value: the surface is mounted once and lives
+   * through tab switches, so a path read at mount time would be the previous
+   * document's by the time anyone pastes.
+   */
+  imageTarget?: () => ImageTarget | null;
+  /**
+   * A pasted image could not be written. Nothing else would say so — the
+   * paste has already been claimed, so without this the picture is simply
+   * gone.
+   */
+  onImageError?: (error: unknown) => void;
 }
 
 /**

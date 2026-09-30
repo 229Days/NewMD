@@ -16,7 +16,8 @@ import {
 } from "@newmd/core";
 import { confirmAction } from "./dialog";
 
-function errorMessage(err: unknown): string {
+/** The part of an error worth showing: what went wrong, not its stack. */
+export function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 

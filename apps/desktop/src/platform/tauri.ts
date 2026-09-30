@@ -64,6 +64,9 @@ export function createTauriAdapter(): PlatformAdapter {
 
     writeTextFile: (path, content) => invoke<WriteResult>("write_text_file", { path, content }),
 
+    // Bytes, not text: a pasted image must reach disk unaltered (ADR-0001 §2.8).
+    writeBinaryFile: (path, bytes) => invoke<WriteResult>("write_binary_file", { path, bytes }),
+
     createDir: (path) => invoke<void>("create_dir", { path }),
 
     renamePath: (from, to) => invoke<void>("rename_path", { from, to }),

@@ -129,15 +129,18 @@ pub fn read_text_file(path: String) -> Result<TextFileDto, String> {
     })
 }
 
-#[tauri::command]
-pub fn write_text_file(path: String, content: String) -> Result<WriteResultDto, String> {
-    let file = Path::new(&path);
+/// Creates the directory a file is about to be written into.
+fn ensure_parent(file: &Path) -> Result<(), String> {
     if let Some(parent) = file.parent() {
         if !parent.as_os_str().is_empty() {
             fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
         }
     }
-    fs::write(file, content.as_bytes()).map_err(|e| format!("{}: {e}", file.display()))?;
+    Ok(())
+}
+
+/// Where a file just written ended up, and when.
+fn write_result(file: &Path) -> Result<WriteResultDto, String> {
     let modified_at = fs::metadata(file)
         .and_then(|m| m.modified())
         .ok()
@@ -148,6 +151,25 @@ pub fn write_text_file(path: String, content: String) -> Result<WriteResultDto, 
         path: path_str(file),
         modified_at,
     })
+}
+
+#[tauri::command]
+pub fn write_text_file(path: String, content: String) -> Result<WriteResultDto, String> {
+    let file = Path::new(&path);
+    ensure_parent(file)?;
+    fs::write(file, content.as_bytes()).map_err(|e| format!("{}: {e}", file.display()))?;
+    write_result(file)
+}
+
+/// Raw bytes, for anything that is not text — a pasted image has to reach disk
+/// unaltered (ADR-0001 §2.8), and routing it through a `String` would not
+/// survive the trip.
+#[tauri::command]
+pub fn write_binary_file(path: String, bytes: Vec<u8>) -> Result<WriteResultDto, String> {
+    let file = Path::new(&path);
+    ensure_parent(file)?;
+    fs::write(file, bytes).map_err(|e| format!("{}: {e}", file.display()))?;
+    write_result(file)
 }
 
 #[tauri::command]

@@ -58,6 +58,12 @@ export interface PlatformAdapter {
   listDir(dirPath: string): Promise<FileEntry[]>;
   readTextFile(path: string): Promise<TextFile>;
   writeTextFile(path: string, content: string): Promise<WriteResult>;
+  /**
+   * Write raw bytes. Separate from `writeTextFile` because a pasted image is
+   * not text and getting it there by way of a string would be a re-encoding
+   * with a loss somewhere in it (ADR-0001 §2.8 图片入 `./assets/`).
+   */
+  writeBinaryFile(path: string, bytes: Uint8Array): Promise<WriteResult>;
   createDir(path: string): Promise<void>;
   renamePath(from: string, to: string): Promise<void>;
   removePath(path: string): Promise<void>;

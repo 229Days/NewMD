@@ -20,6 +20,7 @@ import type {
   MarkdownSurface,
 } from "./handle";
 import { createSourceEditor } from "./codemirror";
+import { imageFileOf, savePastedImage } from "./paste-image";
 import { createWysiwygEditor } from "./wysiwyg";
 
 /**
@@ -37,6 +38,39 @@ export async function createMarkdownEditor(
   let handle: MarkdownEditorHandle = await mount(mode, options.doc);
 
   /**
+   * Write a pasted image to disk, then put its relative path at the cursor.
+   *
+   * The listener sits on `options.parent` in the capture phase, and that is
+   * what lets one implementation cover both engines. Each engine binds its own
+   * paste handler to its own editable element, further down the same path, so
+   * capturing here runs first and stopping the event means neither of them is
+   * ever handed a clipboard carrying a picture and no text — the WYSIWYG
+   * engine would otherwise fall through to its "nothing to paste" path and
+   * leave a stray textarea behind.
+   *
+   * Claimed only when there is something to claim with: an image on the
+   * clipboard *and* a file to write it beside. A buffer that has never been
+   * saved has no `./assets/` to write into, and taking the paste anyway would
+   * drop the picture silently — which is worse than letting the browser do
+   * what it does with a paste it does not understand.
+   */
+  const onPaste = (event: ClipboardEvent): void => {
+    const file = imageFileOf(event);
+    const target = options.imageTarget?.() ?? null;
+    if (file === null || target === null) return;
+    event.preventDefault();
+    event.stopPropagation();
+
+    // `handle` is read inside the callback rather than captured now: the
+    // surface can swap engines while the write is in flight, and the path
+    // belongs in whichever one is live when it lands.
+    void savePastedImage(target, file)
+      .then((relative) => handle.insertImage({ url: relative, alt: "" }))
+      .catch((error: unknown) => options.onImageError?.(error));
+  };
+  options.parent.addEventListener("paste", onPaste, { capture: true });
+
+  /**
    * Boot one engine with the state that has to survive the swap.
    *
    * `spellcheck` is read from here rather than from `options` because the user
@@ -50,6 +84,8 @@ export async function createMarkdownEditor(
       onChange: options.onChange,
       onCursorChange: options.onCursorChange,
       spellcheck,
+      imageTarget: options.imageTarget,
+      onImageError: options.onImageError,
     };
     return which === "source" ? createSourceEditor(shared) : await createWysiwygEditor(shared);
   }
@@ -122,6 +158,7 @@ export async function createMarkdownEditor(
       return run;
     },
     async destroy() {
+      options.parent.removeEventListener("paste", onPaste, { capture: true });
       await handle.destroy();
     },
   };
