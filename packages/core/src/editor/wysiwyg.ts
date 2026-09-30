@@ -53,6 +53,7 @@ import { $markSchema, $nodeSchema, $prose, replaceAll } from "@milkdown/utils";
 import type { Root } from "mdast";
 import { SearchQuery, type SearchResult } from "prosemirror-search";
 import remarkGfm from "remark-gfm";
+import remarkFrontmatter from "remark-frontmatter";
 import remarkMath from "remark-math";
 import type { Plugin as RemarkPlugin } from "unified";
 import type {
@@ -204,6 +205,98 @@ const definitionSchema = $nodeSchema("definition", () => ({
         // title either way — but `null` is what the node arrived as.
         title: node.attrs.title || null,
       });
+    },
+  },
+}));
+
+/**
+ * YAML front matter — `---` fenced metadata at the very top of the file.
+ *
+ * mdast hands this over as one string: the lines between the fences with the
+ * fences stripped, and the same string is what goes back out. So the panel
+ * below only ever *reads* it. Round-tripping the metadata through a YAML
+ * parser and back would be lossy in ways the reader meets on their next save —
+ * comments dropped, keys reordered, quoting normalised — and every one of
+ * those would have to be declared as an accepted rewrite in the corpus.
+ *
+ * Which makes this a view over bytes that stay put: the rows split a line into
+ * a key and a value so a stylesheet can tell them apart, and nothing they show
+ * is ever written back. The reader edits the source in source mode. Making the
+ * rows themselves writable (ADR-0001 §2.5 可视化编辑) needs that write path
+ * first; the milestone this belongs to only asks that the metadata be visible.
+ */
+const FRONT_MATTER_FIELD = /^([\w.-]+):(?:[ \t]+(.*))?$/;
+
+const frontMatterSchema = $nodeSchema("yaml", () => ({
+  group: "block",
+  atom: true,
+  selectable: true,
+  isolating: true,
+  defining: true,
+  attrs: {
+    value: { default: "", validate: "string" },
+  },
+  toDOM: (node) => {
+    const panel = document.createElement("div");
+    panel.setAttribute("data-newmd-frontmatter", "");
+    for (const line of String(node.attrs.value ?? "").split("\n")) {
+      const row = document.createElement("div");
+      row.setAttribute("data-line", "");
+      const field = FRONT_MATTER_FIELD.exec(line);
+      if (field === null) {
+        // An indented list item, a comment, a continuation line: shown as it
+        // was typed. This reads lines, it does not parse YAML, so a shape it
+        // does not recognise shows one row rather than losing the text.
+        row.textContent = line;
+      } else {
+        const key = field[1] ?? "";
+        const rawValue = field[2];
+        const keyPart = document.createElement("span");
+        keyPart.setAttribute("data-key", "");
+        keyPart.textContent = key;
+        row.append(keyPart);
+        if (rawValue === undefined) {
+          // A key with nothing after the colon (`tags:`) — the rest of the
+          // line is separator, not value.
+          row.append(line.slice(key.length));
+        } else {
+          // The colon and whatever spacing the source used between it and the
+          // value. Taken by length rather than re-derived, so the row reads
+          // back as the exact line it was split out of.
+          const gap = line.length - key.length - rawValue.length;
+          row.append(line.slice(key.length, key.length + gap));
+          const valuePart = document.createElement("span");
+          valuePart.setAttribute("data-value", "");
+          valuePart.textContent = rawValue;
+          row.append(valuePart);
+        }
+      }
+      panel.append(row);
+    }
+    return panel;
+  },
+  parseDOM: [
+    {
+      tag: "div[data-newmd-frontmatter]",
+      getAttrs: (dom) => {
+        if (!(dom instanceof Element)) return { value: "" };
+        // Each row's text is its source line, so putting the rows back
+        // together is the value again — the split above loses nothing.
+        const rows = Array.from(dom.querySelectorAll("[data-line]"));
+        return { value: rows.map((row) => row.textContent ?? "").join("\n") };
+      },
+    },
+  ],
+  parseMarkdown: {
+    match: ({ type }) => type === "yaml",
+    runner: (state, node, type) => {
+      state.addNode(type, { value: String(node.value ?? "") });
+    },
+  },
+  toMarkdown: {
+    match: (node) => node.type.name === "yaml",
+    runner: (state, node) => {
+      state.addNode("yaml", undefined, undefined, { value: node.attrs.value });
     },
   },
 }));
@@ -554,6 +647,12 @@ export async function createWysiwygEditor(
         // Same registration the merge gate makes, so both pipelines parse the
         // same spans of `$…$` as math.
         { plugin: remarkMath, options: {} },
+        // This plugin's option is the string `'yaml'`, its default. The record
+        // the context is typed as will not take a string, and passing `{}` is
+        // not neutral either: the plugin treats any truthy argument as a
+        // configuration object and would read `.type` off it, registering no
+        // fence at all.
+        { plugin: remarkFrontmatter, options: "yaml" } as unknown as (typeof list)[number],
         // Reference resolution first: it rewrites `imageReference` into `image`,
         // and the strings below then normalise whatever it produced.
         { plugin: inlineLinkReferences, options: {} },
@@ -573,6 +672,7 @@ export async function createWysiwygEditor(
     .use(subscriptSchema)
     .use(mathSchema)
     .use(inlineMathSchema)
+    .use(frontMatterSchema)
     .use(gfmWithoutSingleTildeStrikes)
     .use(history)
     .use(

@@ -9,6 +9,7 @@
  */
 import type { Definition, Root } from "mdast";
 import remarkGfm from "remark-gfm";
+import remarkFrontmatter from "remark-frontmatter";
 import remarkMath from "remark-math";
 import remarkParse from "remark-parse";
 import remarkStringify, { type Options } from "remark-stringify";
@@ -120,6 +121,11 @@ const processor = unified()
   // no children, which is what keeps `editor/inline-marks.ts` from reading the
   // `^2^` in `$x^2$` as a superscript that was never typed.
   .use(remarkMath)
+  // Front matter. Left at its default fence, so this is YAML under `---` and
+  // nothing else: TOML under `+++` stays an ordinary paragraph that both
+  // pipelines already round-trip untouched, rather than becoming a node the
+  // engine has no schema for and would drop.
+  .use(remarkFrontmatter)
   .use(inlineLinkReferences)
   .use(remarkInlineMarks)
   .use(remarkStringify, stringifyOptions);

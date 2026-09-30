@@ -133,3 +133,34 @@ body {
 .toast-enter {
   animation: toast-in 160ms ease-out;
 }
+
+/*
+ * YAML front matter (ADR-0001 §2.4).
+ *
+ * The engine renders this block from the reader's own source, so the panel
+ * only has to look like metadata rather than like body text: an inset box in
+ * the mono face, keys slightly firmer than values. Rows are block elements,
+ * which is what keeps the source's own line breaks, and `pre-wrap` is what
+ * keeps an indented list item indented.
+ */
+[data-newmd-frontmatter] {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  margin-block: 1.25em;
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+[data-newmd-frontmatter] [data-key] {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+[data-newmd-frontmatter] [data-value] {
+  color: var(--fg);
+}

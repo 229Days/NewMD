@@ -32,6 +32,7 @@
     "i18next": "^26.4.2",
     "katex": "^0.18.9",
     "prosemirror-search": "^1.1.1",
+    "remark-frontmatter": "^5.0.0",
     "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",
     "remark-parse": "^11.0.0",

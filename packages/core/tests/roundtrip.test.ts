@@ -52,6 +52,7 @@ const EXERCISES: Record<string, string[]> = {
   "dollar.md": ["paragraph"],
   "fenced-code.md": ["code"],
   "footnote.md": ["footnoteDefinition", "footnoteReference"],
+  "front-matter.md": ["yaml"],
   "headings.md": ["heading"],
   "highlight.md": ["mark"],
   "horizontal-rule.md": ["thematicBreak"],
