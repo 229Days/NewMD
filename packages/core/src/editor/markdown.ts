@@ -12,6 +12,7 @@ import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
 import remarkStringify, { type Options } from "remark-stringify";
 import { unified, type Plugin } from "unified";
+import { inlineMarkHandlers, remarkInlineMarks } from "./inline-marks";
 
 /**
  * Serialization policy. These are decisions about how a user's Markdown looks
@@ -26,6 +27,12 @@ export const stringifyOptions: Options = {
   // every horizontal rule, `*` for every bullet.
   rule: "-",
   bullet: "-",
+  // The paired-delimiter marks parse in `inline-marks.ts` have no builtin
+  // handler — mdast has no node type for them — so this is where they are
+  // written back out. Part of the same options object as the rest of the
+  // policy, because the engine is handed this object wholesale and a second
+  // copy would let a save spell `==` differently depending on the mode.
+  handlers: inlineMarkHandlers,
 };
 
 /**
@@ -99,11 +106,33 @@ const processor = unified()
   .use(remarkParse)
   .use(remarkGfm)
   .use(inlineLinkReferences)
+  .use(remarkInlineMarks)
   .use(remarkStringify, stringifyOptions);
 
-/** Parse Markdown into an mdast tree. */
+/**
+ * Parse Markdown into the raw mdast tree, before any transformer runs.
+ *
+ * `outline` wants this one: a heading is a heading before anything rewrites the
+ * text under it, and running the link-resolution pass would be work with no
+ * answer to show for it.
+ */
 export function parse(text: string): Root {
   return processor.parse(text);
+}
+
+/**
+ * Parse Markdown and run every transformer the save path runs, stopping short
+ * of writing anything out.
+ *
+ * The distinction matters to the merge gate. Some constructs are recognised by
+ * the tokenizer (`![alt][ref]` arrives as `imageReference`) and some only by a
+ * transformer that runs after it (`==highlight==` arrives as plain text and
+ * becomes `mark` later). Testing recognition against `parse` alone would pass
+ * the first kind and report the second as unsupported even though the editor
+ * renders it — so the gate reads this tree as well as the raw one.
+ */
+export function parseTransformed(text: string): Root {
+  return processor.runSync(processor.parse(text)) as Root;
 }
 
 /**

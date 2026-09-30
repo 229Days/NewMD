@@ -13,7 +13,7 @@
  * output. A file with no pair promises byte identity.
  */
 import { describe, expect, it } from "vitest";
-import { parse, roundTrip } from "../src/editor/markdown";
+import { parse, parseTransformed, roundTrip } from "../src/editor/markdown";
 import { goldenCases, nodeTypes } from "./golden";
 
 describe("the golden corpus survives a round trip", () => {
@@ -51,6 +51,7 @@ const EXERCISES: Record<string, string[]> = {
   "blockquote.md": ["blockquote"],
   "fenced-code.md": ["code"],
   "headings.md": ["heading"],
+  "highlight.md": ["mark"],
   "horizontal-rule.md": ["thematicBreak"],
   "images.md": ["image", "imageReference", "definition"],
   "inline-code.md": ["inlineCode"],
@@ -69,9 +70,18 @@ describe("the corpus exercises the syntax M2 claims to support", () => {
   });
 
   it.each(cases.map((c) => [c.name, c] as const))("parses %s into real nodes", (name, testCase) => {
-    const found = nodeTypes(parse(testCase.input));
+    // Both stages, on purpose. A construct the tokenizer understands shows up
+    // in the raw tree and is often consumed by a transformer afterwards —
+    // `![a][ref]` is an `imageReference` until link resolution rewrites it —
+    // while a construct only the transformers understand (`==highlight==`)
+    // never appears in the raw tree at all. Either one is the pipeline
+    // recognising the file, so the declaration is checked against both.
+    const found = new Set([
+      ...nodeTypes(parse(testCase.input)),
+      ...nodeTypes(parseTransformed(testCase.input)),
+    ]);
     for (const required of EXERCISES[name] ?? []) {
-      expect(found).toContain(required);
+      expect([...found]).toContain(required);
     }
   });
 });

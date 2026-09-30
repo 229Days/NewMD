@@ -49,7 +49,7 @@ import {
 import { gfm } from "@milkdown/preset-gfm";
 import { Plugin, PluginKey, TextSelection } from "@milkdown/prose/state";
 import type { EditorView } from "@milkdown/prose/view";
-import { $nodeSchema, $prose, replaceAll } from "@milkdown/utils";
+import { $markSchema, $nodeSchema, $prose, replaceAll } from "@milkdown/utils";
 import type { Root } from "mdast";
 import { SearchQuery, type SearchResult } from "prosemirror-search";
 import type { Plugin as RemarkPlugin } from "unified";
@@ -68,6 +68,7 @@ import {
   stepForward,
   type FindGlue,
 } from "./find";
+import { inlineMarkHandlers, remarkInlineMarks } from "./inline-marks";
 import { inlineLinkReferences, stringifyOptions } from "./markdown";
 
 /**
@@ -179,6 +180,40 @@ const definitionSchema = $nodeSchema("definition", () => ({
         // title either way — but `null` is what the node arrived as.
         title: node.attrs.title || null,
       });
+    },
+  },
+}));
+
+/**
+ * `==highlight==` (ADR-0001 §2.4 常用扩展).
+ *
+ * mdast has no node type for this — the delimiter is recognised by
+ * `editor/inline-marks.ts`, which runs in both this engine and the merge gate —
+ * so without a schema here the parse would produce a `mark` this document has
+ * no room for and ProseMirror would drop it on the floor.
+ *
+ * An element mark rather than an atom: the reader edits the text inside the
+ * highlight the way they edit any other text, and `<mark>` is the tag browsers
+ * already render as one, so `toDOM` needs no styling of its own.
+ */
+const markSchema = $markSchema("mark", () => ({
+  parseDOM: [{ tag: "mark" }],
+  toDOM: () => ["mark", 0],
+  parseMarkdown: {
+    match: ({ type }) => type === "mark",
+    runner: (state, node, type) => {
+      state.openMark(type);
+      state.next(node.children);
+      state.closeMark(type);
+    },
+  },
+  toMarkdown: {
+    match: (mark) => mark.type.name === "mark",
+    runner: (state, mark) => {
+      // The mdast type, not a spelling: `remarkInlineMarks` owns the delimiters
+      // and writes them back through the handler in `inline-marks.ts`, so the
+      // two halves of the hop cannot disagree about how it is spelled.
+      state.withMark(mark, "mark");
     },
   },
 }));
@@ -358,12 +393,17 @@ export async function createWysiwygEditor(
         // and the strings below then normalise whatever it produced.
         { plugin: inlineLinkReferences, options: {} },
         { plugin: fillAbsentStrings, options: {} },
+        // Last, and in the same position the merge gate runs it, so both
+        // pipelines see the same tree. Ordering matters only against the two
+        // above, and neither of those creates or consumes a paired delimiter.
+        { plugin: remarkInlineMarks, options: {} },
       ]);
     })
     .use(commonmarkKeepingDefinitions)
     // See the file header: this one is exported but not in the preset.
     .use(insertImageInputRule)
     .use(definitionSchema)
+    .use(markSchema)
     .use(gfm)
     .use(history)
     .use(
