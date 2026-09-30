@@ -50,6 +50,7 @@ describe("the golden corpus survives a round trip", () => {
 const EXERCISES: Record<string, string[]> = {
   "blockquote.md": ["blockquote"],
   "fenced-code.md": ["code"],
+  "footnote.md": ["footnoteDefinition", "footnoteReference"],
   "headings.md": ["heading"],
   "highlight.md": ["mark"],
   "horizontal-rule.md": ["thematicBreak"],
