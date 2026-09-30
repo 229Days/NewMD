@@ -1,0 +1,8 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# pnpm 10 blocks postinstall scripts by default. esbuild needs its platform
+# binary installed or Vite cannot start.
+onlyBuiltDependencies:
+  - esbuild

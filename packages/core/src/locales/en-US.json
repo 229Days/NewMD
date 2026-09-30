@@ -1,0 +1,148 @@
+{
+  "app": {
+    "bootFailed": "Failed to start NewMD"
+  },
+  "common": {
+    "cancel": "Cancel",
+    "dismiss": "Dismiss",
+    "loading": "Loading…",
+    "markdown": "Markdown",
+    "ok": "OK",
+    "untitled": "Untitled"
+  },
+  "titleBar": {
+    "close": "Close",
+    "folder": "Folder",
+    "hideSidebar": "Hide sidebar",
+    "new": "New",
+    "noFile": "No file open",
+    "open": "Open",
+    "save": "Save",
+    "saveAs": "Save as",
+    "saveHint": "Save ({{binding}})",
+    "showSidebar": "Show sidebar",
+    "switchToDark": "Switch to dark",
+    "switchToLight": "Switch to light",
+    "unsaved": "Unsaved changes"
+  },
+  "sidebar": {
+    "emptyFolder": "No Markdown files in this folder.",
+    "files": "Files",
+    "filesIn": "Files · {{name}}",
+    "nothingYet": "Nothing yet.",
+    "openFolder": "Open folder…",
+    "openFolderHint": "Open a folder to browse its Markdown files.",
+    "outlineEmpty": "This document has no headings yet.",
+    "recent": "Recent",
+    "refresh": "Refresh",
+    "refreshHint": "Refresh file list",
+    "tabFiles": "Files",
+    "tabOutline": "Outline",
+    "tabsLabel": "Sidebar panels",
+    "untitledHeading": "(untitled)"
+  },
+  "editor": {
+    "emptyHint": "Open a Markdown file from a folder, or start a new document.",
+    "newDocument": "New document",
+    "noFile": "No file open",
+    "openFile": "Open file…",
+    "openFolder": "Open folder…"
+  },
+  "find": {
+    "caseSensitive": "Match case",
+    "close": "Close find",
+    "matches": "{{count}} matches",
+    "next": "Next",
+    "noMatches": "No matches",
+    "openHint": "Find (Ctrl+F)",
+    "placeholder": "Find",
+    "previous": "Previous",
+    "replace": "Replace",
+    "replaceAll": "Replace all",
+    "replaceHint": "Replace ({{binding}})",
+    "replacePlaceholder": "Replace with"
+  },
+  "tabs": {
+    "close": "Close tab",
+    "dirty": "Unsaved",
+    "label": "Open tabs",
+    "new": "New tab"
+  },
+  "statusBar": {
+    "chars": "{{count}} chars",
+    "lines": "{{count}} lines",
+    "modeSource": "Source",
+    "modeWysiwyg": "WYSIWYG",
+    "position": "Ln {{line}}, Col {{column}}",
+    "ready": "Ready",
+    "saved": "Saved",
+    "switchMode": "Toggle editing mode ({{binding}})",
+    "unsaved": "Unsaved",
+    "working": "Working…",
+    "workspace": "Workspace"
+  },
+  "dialog": {
+    "discardMessage": "Reload the file from disk? Unsaved changes will be lost.",
+    "discardTitle": "Discard changes",
+    "dontSave": "Don't save",
+    "reload": "Reload",
+    "save": "Save",
+    "unsavedMessage": "“{{name}}” has unsaved changes.",
+    "unsavedTitle": "Unsaved changes"
+  },
+  "actions": {
+    "expandFolder": "Expand folder",
+    "failed": "{{label}} failed: {{message}}",
+    "newDocumentCreated": "New document created",
+    "openFile": "Open file",
+    "openFolder": "Open folder",
+    "refresh": "Refresh",
+    "reload": "Reload",
+    "save": "Save",
+    "saveAs": "Save as",
+    "saved": "Saved",
+    "workspaceOpened": "Workspace opened"
+  },
+  "core": {
+    "autosaveFailed": "Autosave failed: {{message}}",
+    "recoveredUnsaved": "Recovered unsaved changes from your last session."
+  },
+  "hotkeys": {
+    "capturing": "Press a new shortcut",
+    "closeDocument": "Close document",
+    "find": "Find",
+    "newDocument": "New document",
+    "openFile": "Open file",
+    "openFolder": "Open folder",
+    "rebindHint": "Click, then press the new keys. Esc cancels.",
+    "reload": "Reload from disk",
+    "replace": "Replace",
+    "save": "Save",
+    "saveAs": "Save as",
+    "settings": "Open settings",
+    "title": "Shortcuts",
+    "toggleMode": "Toggle editing mode",
+    "toggleSidebar": "Toggle sidebar",
+    "unbound": "Unbound"
+  },
+  "settings": {
+    "appearance": "Appearance",
+    "customCss": "Custom CSS",
+    "editorMaxWidth": "Editor width",
+    "fontFamily": "Font",
+    "fontSize": "Font size",
+    "language": "Language",
+    "lineHeight": "Line height",
+    "locales": {
+      "en-US": "English",
+      "zh-CN": "中文"
+    },
+    "theme": "Theme",
+    "themes": {
+      "dark": "Dark",
+      "light": "Light",
+      "system": "System"
+    },
+    "title": "Settings"
+  }
+}

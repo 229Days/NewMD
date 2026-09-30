@@ -1,0 +1,11 @@
+# The golden corpus is byte-exact test data, not prose.
+#
+# `tests/roundtrip.test.ts` and `tests/engine-roundtrip.test.ts` compare against
+# these files one byte at a time, and several of them exist precisely to pin a
+# spelling the formatter disagrees with — an unevenly padded table, a nested
+# blockquote kept on one line, a file that stops without a trailing newline.
+# Reformatting them does not tidy anything: it deletes the difference under
+# test and either breaks the suite or, worse, quietly narrows what it covers.
+packages/core/tests/golden/
+
+.claude/

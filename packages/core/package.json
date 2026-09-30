@@ -1,0 +1,48 @@
+{
+  "name": "@newmd/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./platform": "./src/platform/index.ts",
+    "./stores": "./src/stores/index.ts",
+    "./editor": "./src/editor/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@codemirror/commands": "^6.8.1",
+    "@codemirror/lang-markdown": "^6.3.4",
+    "@codemirror/language": "^6.11.3",
+    "@codemirror/search": "^6.5.11",
+    "@codemirror/state": "^6.5.2",
+    "@codemirror/view": "^6.38.6",
+    "@milkdown/core": "^7.22.2",
+    "@milkdown/ctx": "^7.22.2",
+    "@milkdown/plugin-history": "^7.22.2",
+    "@milkdown/preset-commonmark": "^7.22.2",
+    "@milkdown/preset-gfm": "^7.22.2",
+    "@milkdown/prose": "^7.22.2",
+    "@milkdown/transformer": "^7.22.2",
+    "@milkdown/utils": "^7.22.2",
+    "i18next": "^26.4.2",
+    "prosemirror-search": "^1.1.1",
+    "remark-gfm": "^4.0.1",
+    "remark-parse": "^11.0.0",
+    "remark-stringify": "^11.0.0",
+    "unified": "^11.0.5",
+    "zustand": "^5.0.8"
+  },
+  "devDependencies": {
+    "@types/mdast": "^4.0.4",
+    "@types/node": "^26.6.3",
+    "jsdom": "^30.1.1",
+    "typescript": "^5.9.2",
+    "vite": "^7.3.6",
+    "vitest": "^3.2.4"
+  }
+}

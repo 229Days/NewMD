@@ -1,0 +1,36 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# build output
+dist/
+build/
+*.tsbuildinfo
+
+# rust / tauri
+target/
+apps/desktop/src-tauri/gen/schemas/
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# editor / os
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# test artifacts
+coverage/
+test-results/
+playwright-report/
+
+# local env
+.env
+.env.local
+
+# local scratch
+.m1-screenshot.png

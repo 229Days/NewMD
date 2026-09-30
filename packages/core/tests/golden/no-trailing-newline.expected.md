@@ -1,0 +1,1 @@
+A file that stops without a newline.

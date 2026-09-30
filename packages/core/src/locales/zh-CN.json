@@ -1,0 +1,148 @@
+{
+  "app": {
+    "bootFailed": "NewMD 启动失败"
+  },
+  "common": {
+    "cancel": "取消",
+    "dismiss": "关闭",
+    "loading": "加载中…",
+    "markdown": "Markdown",
+    "ok": "确定",
+    "untitled": "未命名"
+  },
+  "titleBar": {
+    "close": "关闭",
+    "folder": "文件夹",
+    "hideSidebar": "隐藏侧栏",
+    "new": "新建",
+    "noFile": "未打开文件",
+    "open": "打开",
+    "save": "保存",
+    "saveAs": "另存为",
+    "saveHint": "保存 ({{binding}})",
+    "showSidebar": "显示侧栏",
+    "switchToDark": "切换到深色",
+    "switchToLight": "切换到浅色",
+    "unsaved": "未保存的修改"
+  },
+  "sidebar": {
+    "emptyFolder": "此文件夹中没有 Markdown 文件。",
+    "files": "文件",
+    "filesIn": "文件 · {{name}}",
+    "nothingYet": "暂无记录。",
+    "openFolder": "打开文件夹…",
+    "openFolderHint": "打开文件夹以浏览其中的 Markdown 文件。",
+    "outlineEmpty": "文档里还没有标题。",
+    "recent": "最近",
+    "refresh": "刷新",
+    "refreshHint": "刷新文件列表",
+    "tabFiles": "文件",
+    "tabOutline": "大纲",
+    "tabsLabel": "侧栏面板",
+    "untitledHeading": "（无标题）"
+  },
+  "editor": {
+    "emptyHint": "从文件夹打开 Markdown 文件，或新建文档。",
+    "newDocument": "新建文档",
+    "noFile": "未打开文件",
+    "openFile": "打开文件…",
+    "openFolder": "打开文件夹…"
+  },
+  "find": {
+    "caseSensitive": "区分大小写",
+    "close": "关闭查找",
+    "matches": "{{count}} 个匹配",
+    "next": "下一个",
+    "noMatches": "无匹配",
+    "openHint": "查找 (Ctrl+F)",
+    "placeholder": "查找",
+    "previous": "上一个",
+    "replace": "替换",
+    "replaceAll": "全部替换",
+    "replaceHint": "替换 ({{binding}})",
+    "replacePlaceholder": "替换为"
+  },
+  "tabs": {
+    "close": "关闭标签",
+    "dirty": "未保存",
+    "label": "打开的标签",
+    "new": "新建标签"
+  },
+  "statusBar": {
+    "chars": "{{count}} 字符",
+    "lines": "{{count}} 行",
+    "modeSource": "源码",
+    "modeWysiwyg": "所见即所得",
+    "position": "第 {{line}} 行，第 {{column}} 列",
+    "ready": "就绪",
+    "saved": "已保存",
+    "switchMode": "切换编辑模式 ({{binding}})",
+    "unsaved": "未保存",
+    "working": "处理中…",
+    "workspace": "工作区"
+  },
+  "dialog": {
+    "discardMessage": "从磁盘重新加载文件？未保存的修改将丢失。",
+    "discardTitle": "放弃修改",
+    "dontSave": "不保存",
+    "reload": "重新加载",
+    "save": "保存",
+    "unsavedMessage": "「{{name}}」有未保存的修改。",
+    "unsavedTitle": "未保存的修改"
+  },
+  "actions": {
+    "expandFolder": "展开文件夹",
+    "failed": "{{label}}失败：{{message}}",
+    "newDocumentCreated": "已新建文档",
+    "openFile": "打开文件",
+    "openFolder": "打开文件夹",
+    "refresh": "刷新",
+    "reload": "重新加载",
+    "save": "保存",
+    "saveAs": "另存为",
+    "saved": "已保存",
+    "workspaceOpened": "已打开工作区"
+  },
+  "core": {
+    "autosaveFailed": "自动保存失败：{{message}}",
+    "recoveredUnsaved": "已从上次会话恢复未保存的修改。"
+  },
+  "hotkeys": {
+    "capturing": "请按下新的快捷键",
+    "closeDocument": "关闭文档",
+    "find": "查找",
+    "newDocument": "新建文档",
+    "openFile": "打开文件",
+    "openFolder": "打开文件夹",
+    "rebindHint": "点击后按下新的组合键，Esc 取消",
+    "reload": "重新加载",
+    "replace": "替换",
+    "save": "保存",
+    "saveAs": "另存为",
+    "settings": "打开设置",
+    "title": "快捷键",
+    "toggleMode": "切换编辑模式",
+    "toggleSidebar": "显示/隐藏侧栏",
+    "unbound": "未绑定"
+  },
+  "settings": {
+    "appearance": "外观",
+    "customCss": "自定义 CSS",
+    "editorMaxWidth": "编辑器宽度",
+    "fontFamily": "字体",
+    "fontSize": "字号",
+    "language": "语言",
+    "lineHeight": "行高",
+    "locales": {
+      "en-US": "English",
+      "zh-CN": "中文"
+    },
+    "theme": "主题",
+    "themes": {
+      "dark": "深色",
+      "light": "浅色",
+      "system": "跟随系统"
+    },
+    "title": "设置"
+  }
+}

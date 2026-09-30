@@ -1,0 +1,12 @@
+# Line endings are part of the test fixtures: `core.autocrlf=true` (the
+# Windows default) rewrites LF to CRLF on checkout, and the golden corpus is
+# compared byte for byte. Pin everything to LF so a fresh clone on any machine
+# checks out the bytes the tests were written against.
+* text=auto eol=lf
+
+# Images are not text and must never be touched.
+*.png binary
+*.icns binary
+*.ico binary
+*.jpg binary
+*.svg text eol=lf
