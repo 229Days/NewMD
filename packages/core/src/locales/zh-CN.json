@@ -43,7 +43,9 @@
   },
   "editor": {
     "emptyHint": "从文件夹打开 Markdown 文件，或新建文档。",
+    "imageFilter": "图片",
     "imagePasteFailed": "图片保存失败：{{message}}",
+    "needsSaveFirst": "请先保存文件，图片才能放到它旁边。",
     "newDocument": "新建文档",
     "noFile": "未打开文件",
     "openFile": "打开文件…",
@@ -94,6 +96,7 @@
   "actions": {
     "expandFolder": "展开文件夹",
     "failed": "{{label}}失败：{{message}}",
+    "insertImage": "插入图片",
     "newDocumentCreated": "已新建文档",
     "openFile": "打开文件",
     "openFolder": "打开文件夹",
@@ -112,6 +115,7 @@
     "capturing": "请按下新的快捷键",
     "closeDocument": "关闭文档",
     "find": "查找",
+    "insertImage": "插入图片",
     "newDocument": "新建文档",
     "openFile": "打开文件",
     "openFolder": "打开文件夹",

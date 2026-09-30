@@ -32,6 +32,12 @@ pub struct TextFileDto {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct BinaryFileDto {
+    pub bytes: Vec<u8>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WriteResultDto {
     pub path: String,
     pub modified_at: u64,
@@ -127,6 +133,17 @@ pub fn read_text_file(path: String) -> Result<TextFileDto, String> {
         content: read_text(file)?,
         modified_at: millis(meta.modified()).unwrap_or(0),
     })
+}
+
+/// Raw bytes of a file that is not text. Wrapped in a struct rather than
+/// returned bare because a bare `Vec<u8>` has more than one way to cross the
+/// IPC boundary, and `invoke` should not have to guess which one it got
+/// (ADR-0001 §2.5 本地路径插入).
+#[tauri::command]
+pub fn read_binary_file(path: String) -> Result<BinaryFileDto, String> {
+    let file = Path::new(&path);
+    let bytes = fs::read(file).map_err(|e| format!("{}: {e}", file.display()))?;
+    Ok(BinaryFileDto { bytes })
 }
 
 /// Creates the directory a file is about to be written into.

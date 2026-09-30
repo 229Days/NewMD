@@ -52,6 +52,7 @@ function fakePlatform(): PlatformAdapter {
     pickSavePath: unused,
     listDir: unused,
     readTextFile: unused,
+    readBinaryFile: unused,
     writeTextFile: unused,
     writeBinaryFile: async (path, bytes) => {
       written.push({ path, bytes });

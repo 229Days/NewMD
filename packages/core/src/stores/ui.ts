@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { HeadingTarget, MarkdownEditorMode } from "../editor/handle";
+import type { HeadingTarget, ImageInsertion, MarkdownEditorMode } from "../editor/handle";
 import type { ResolvedTheme } from "../types";
 
 export interface Toast {
@@ -23,6 +23,20 @@ export interface Toast {
  */
 export interface RevealRequest {
   target: HeadingTarget;
+  seq: number;
+}
+
+/**
+ * An image the action layer has already written into `./assets/`, waiting for
+ * the surface to place it (ADR-0001 §2.5 本地路径插入).
+ *
+ * The same shape as `RevealRequest` for the same reason: the surface lives in
+ * `EditorPane` and is private to it, so a command pressed from the hotkey layer
+ * has nowhere to hand the picture but here. `seq` is what lets a reader insert
+ * the same image twice without the second one being mistaken for the first.
+ */
+export interface ImageInsertRequest {
+  image: ImageInsertion;
   seq: number;
 }
 
@@ -61,6 +75,7 @@ export interface UiState {
    */
   findOpen: boolean;
   reveal: RevealRequest | null;
+  imageInsert: ImageInsertRequest | null;
 
   setTheme(theme: ResolvedTheme): void;
   toggleSidebar(): void;
@@ -74,12 +89,14 @@ export interface UiState {
   toggleMode(): void;
   setFindOpen(open: boolean): void;
   requestReveal(target: HeadingTarget): void;
+  requestImageInsert(image: ImageInsertion): void;
   notify(kind: Toast["kind"], message: string): void;
   dismissToast(): void;
 }
 
 let toastSeq = 0;
 let revealSeq = 0;
+let imageInsertSeq = 0;
 
 export const useUi = create<UiState>()((set, get) => ({
   theme: "light",
@@ -93,6 +110,7 @@ export const useUi = create<UiState>()((set, get) => ({
   mode: "wysiwyg",
   findOpen: false,
   reveal: null,
+  imageInsert: null,
 
   setTheme: (theme) => set({ theme }),
   toggleSidebar: () => set({ sidebarOpen: !get().sidebarOpen }),
@@ -106,6 +124,7 @@ export const useUi = create<UiState>()((set, get) => ({
   toggleMode: () => set({ mode: get().mode === "wysiwyg" ? "source" : "wysiwyg" }),
   setFindOpen: (findOpen) => set({ findOpen }),
   requestReveal: (target) => set({ reveal: { target, seq: ++revealSeq } }),
+  requestImageInsert: (image) => set({ imageInsert: { image, seq: ++imageInsertSeq } }),
 
   notify(kind, message) {
     set({ toast: { id: ++toastSeq, kind, message } });

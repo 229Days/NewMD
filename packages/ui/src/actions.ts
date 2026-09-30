@@ -14,6 +14,7 @@ import {
   useUi,
   useWorkspace,
 } from "@newmd/core";
+import { saveLocalImage } from "@newmd/core/editor";
 import { confirmAction } from "./dialog";
 
 /** The part of an error worth showing: what went wrong, not its stack. */
@@ -175,4 +176,46 @@ export function toggleSidebar(): void {
 
 export async function updateContent(content: string): Promise<void> {
   useEditor.getState().updateContent(content);
+}
+
+/**
+ * Pick an image from disk and put a copy of it beside this document
+ * (ADR-0001 §2.5 本地路径插入).
+ *
+ * §2.8 refuses to reference a file where it sits — the folder has to survive
+ * being copied, zipped or pushed — so what goes into the Markdown is a link to
+ * `./assets/` and never to the path the picker returned. That is also why an
+ * unsaved document is turned away before the dialog opens: there is no
+ * directory yet to put the copy in, and a picker that runs anyway offers a
+ * choice the app cannot honour.
+ *
+ * The insert itself is a request rather than a call. The surface is private to
+ * `EditorPane`, exactly as the outline's jump is, so the picture travels
+ * through the store and lands wherever the caret is by the time it arrives.
+ */
+export async function handleInsertLocalImage(): Promise<void> {
+  const docPath = useEditor.getState().doc?.path ?? null;
+  if (docPath === null) {
+    useUi.getState().notify("error", t("editor.needsSaveFirst"));
+    return;
+  }
+  const target = { docPath, dirName: useSettings.getState().settings.imageDirName };
+
+  const platform = getPlatform();
+  const picked = await platform.pickFile([
+    {
+      // The name on the dialog filter is a word the reader sees, so it is
+      // asked for like any other.
+      name: t("editor.imageFilter"),
+      extensions: ["png", "jpg", "jpeg", "gif", "svg", "webp", "bmp", "avif"],
+    },
+  ]);
+  if (picked === null) return;
+
+  await report("actions.insertImage", async () => {
+    const relative = await saveLocalImage(target, picked);
+    useUi
+      .getState()
+      .requestImageInsert({ url: relative, alt: platform.pathFileName(picked) ?? "" });
+  });
 }

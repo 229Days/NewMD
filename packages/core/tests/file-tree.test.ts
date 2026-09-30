@@ -64,6 +64,7 @@ function fakePlatform(dirs: Map<string, FileEntry[]>): {
       return dirs.get(path) ?? [];
     },
     readTextFile: unused,
+    readBinaryFile: unused,
     writeTextFile: unused,
     writeBinaryFile: unused,
     createDir: unused,

@@ -34,6 +34,7 @@ function fakePlatform(): { adapter: PlatformAdapter; files: Map<string, string> 
       content: files.get(path) ?? "",
       modifiedAt: 1,
     }),
+    readBinaryFile: unused,
     writeTextFile: async (path, content): Promise<WriteResult> => {
       files.set(path, content);
       return { path, modifiedAt: 2 };

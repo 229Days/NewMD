@@ -13,6 +13,7 @@ import {
   handleNewDocument,
   handleOpenFile,
   handleOpenFolder,
+  handleInsertLocalImage,
   handleReloadFromDisk,
   handleSave,
   handleSaveAs,
@@ -43,6 +44,7 @@ const HOTKEY_COMMANDS: Record<HotkeyActionId, () => void> = {
   saveAs: () => void handleSaveAs(),
   closeDocument: () => void handleCloseDocument(),
   reload: () => void handleReloadFromDisk(),
+  insertImage: () => void handleInsertLocalImage(),
   find: () => useUi.getState().setFindOpen(true),
   // Find and replace share one bar, so the second key opens the same thing the
   // first does — the fields are both on screen already.

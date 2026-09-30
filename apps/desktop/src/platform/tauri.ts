@@ -62,6 +62,12 @@ export function createTauriAdapter(): PlatformAdapter {
 
     readTextFile: (path) => invoke<TextFile>("read_text_file", { path }),
 
+    // Bytes, not text: an image picked by path must reach the document unaltered.
+    readBinaryFile: async (path) => {
+      const { bytes } = await invoke<{ bytes: number[] }>("read_binary_file", { path });
+      return Uint8Array.from(bytes);
+    },
+
     writeTextFile: (path, content) => invoke<WriteResult>("write_text_file", { path, content }),
 
     // Bytes, not text: a pasted image must reach disk unaltered (ADR-0001 §2.8).

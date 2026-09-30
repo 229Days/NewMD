@@ -17,6 +17,7 @@ function fakeAdapter(seed: Record<string, JsonValue> = {}) {
     pickSavePath: unused,
     listDir: unused,
     readTextFile: unused,
+    readBinaryFile: unused,
     writeTextFile: unused,
     writeBinaryFile: unused,
     createDir: unused,

@@ -158,3 +158,51 @@ export async function savePastedImage(target: ImageTarget, file: File): Promise<
   await platform.writeBinaryFile(platform.pathJoin(dir, name), bytes);
   return `./${target.dirName}/${name}`;
 }
+
+/**
+ * Copy an image that is already on disk into `target`'s image directory and
+ * return the path to put in the Markdown (ADR-0001 §2.5 本地路径插入).
+ *
+ * §2.8 rejects 「引用原位置」 outright — a folder has to be copyable and stay
+ * intact — so a picked file is copied like a pasted one, and only the copy is
+ * referenced. What differs is the name: pasted bytes are anonymous and get
+ * `YYYYMMDD-HHmmss-<hash8>`, while a file the reader picked already has a name
+ * that says which picture it is, and renaming it on the way in would throw that
+ * away for nothing.
+ *
+ * The exception is collision. `./assets/logo.png` may already be a *different*
+ * picture that other documents link to, and writing over it would repoint them
+ * all without a word. So the name is kept only while keeping it is free; when
+ * it is not, the file takes the generated name a paste would have had.
+ *
+ * Nothing here checks that the source is an image: a path carries no media
+ * type, and the caller filters its picker for images. What is checked is that
+ * the copy does not land on top of anything, which is the failure that would
+ * otherwise be silent.
+ */
+export async function saveLocalImage(target: ImageTarget, sourcePath: string): Promise<string> {
+  const platform = getPlatform();
+  const name = platform.pathFileName(sourcePath);
+  if (name === null) {
+    throw new PlatformError(`No file name to keep: ${sourcePath}`);
+  }
+  const bytes = await platform.readBinaryFile(sourcePath);
+
+  const documentDir = platform.pathParent(target.docPath);
+  if (documentDir === null) {
+    throw new PlatformError(`No directory to place an image beside: ${target.docPath}`);
+  }
+  const dir = platform.pathJoin(documentDir, target.dirName);
+  const destination = platform.pathJoin(dir, name);
+  if (destination === sourcePath) return `./${target.dirName}/${name}`;
+
+  await platform.createDir(dir);
+  const taken = await platform.pathExists(destination);
+  // A path with no extension cannot have come out of an image filter; `.png`
+  // keeps the generated name well-formed instead of ending in a dot.
+  const ext = platform.pathExtension(sourcePath) ?? "png";
+  const stored = taken ? imageFileName(bytes, ext, new Date()) : name;
+
+  await platform.writeBinaryFile(platform.pathJoin(dir, stored), bytes);
+  return `./${target.dirName}/${stored}`;
+}

@@ -43,7 +43,9 @@
   },
   "editor": {
     "emptyHint": "Open a Markdown file from a folder, or start a new document.",
+    "imageFilter": "Images",
     "imagePasteFailed": "Could not save the image: {{message}}",
+    "needsSaveFirst": "Save the file first so the image can be placed beside it.",
     "newDocument": "New document",
     "noFile": "No file open",
     "openFile": "Open file…",
@@ -94,6 +96,7 @@
   "actions": {
     "expandFolder": "Expand folder",
     "failed": "{{label}} failed: {{message}}",
+    "insertImage": "Insert image",
     "newDocumentCreated": "New document created",
     "openFile": "Open file",
     "openFolder": "Open folder",
@@ -112,6 +115,7 @@
     "capturing": "Press a new shortcut",
     "closeDocument": "Close document",
     "find": "Find",
+    "insertImage": "Insert image",
     "newDocument": "New document",
     "openFile": "Open file",
     "openFolder": "Open folder",

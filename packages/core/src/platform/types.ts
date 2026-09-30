@@ -57,6 +57,12 @@ export interface PlatformAdapter {
   // ---- filesystem ----
   listDir(dirPath: string): Promise<FileEntry[]>;
   readTextFile(path: string): Promise<TextFile>;
+  /**
+   * Read a file as bytes. Separate from `readTextFile` because an image
+   * inserted by path is not text, and getting it there by way of a string would
+   * be a re-encoding with a loss somewhere in it (ADR-0001 §2.5 本地路径插入).
+   */
+  readBinaryFile(path: string): Promise<Uint8Array>;
   writeTextFile(path: string, content: string): Promise<WriteResult>;
   /**
    * Write raw bytes. Separate from `writeTextFile` because a pasted image is

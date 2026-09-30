@@ -20,6 +20,7 @@ export function fakePlatform(): PlatformAdapter {
     pickSavePath: unused,
     listDir: unused,
     readTextFile: unused,
+    readBinaryFile: unused,
     writeTextFile: unused,
     writeBinaryFile: unused,
     createDir: unused,

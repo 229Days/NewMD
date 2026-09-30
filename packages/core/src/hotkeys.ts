@@ -26,6 +26,7 @@ export type HotkeyActionId =
   | "reload"
   | "find"
   | "replace"
+  | "insertImage"
   | "toggleMode"
   | "toggleSidebar"
   | "settings";
@@ -82,6 +83,12 @@ export const HOTKEY_ACTIONS: readonly HotkeyAction[] = [
   { id: "reload", defaultBinding: "Mod+R", labelKey: "hotkeys.reload", firesInEditable: false },
   { id: "find", defaultBinding: "Mod+F", labelKey: "hotkeys.find", firesInEditable: true },
   { id: "replace", defaultBinding: "Mod+H", labelKey: "hotkeys.replace", firesInEditable: true },
+  {
+    id: "insertImage",
+    defaultBinding: "Mod+Shift+I",
+    labelKey: "hotkeys.insertImage",
+    firesInEditable: true,
+  },
   {
     id: "toggleMode",
     defaultBinding: "Mod+/",

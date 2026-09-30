@@ -192,6 +192,12 @@ export function createBrowserAdapter(): PlatformAdapter {
       return { path, content: await file.text(), modifiedAt: file.lastModified };
     },
 
+    async readBinaryFile(path: string): Promise<Uint8Array> {
+      const handle = await resolveFile(path);
+      const file = await handle.getFile();
+      return new Uint8Array(await file.arrayBuffer());
+    },
+
     async writeTextFile(path: string, content: string): Promise<WriteResult> {
       const handle = await resolveFile(path, true);
       const writable = await handle.createWritable();

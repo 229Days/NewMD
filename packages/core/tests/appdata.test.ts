@@ -26,6 +26,7 @@ function fakeAdapter(): { adapter: PlatformAdapter; store: Map<string, JsonValue
     pickSavePath: unused,
     listDir: unused,
     readTextFile: unused,
+    readBinaryFile: unused,
     writeTextFile: unused,
     writeBinaryFile: unused,
     createDir: unused,

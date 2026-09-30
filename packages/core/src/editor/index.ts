@@ -20,3 +20,11 @@ export type {
   MarkdownSurface,
 } from "./handle";
 export { createMarkdownEditor } from "./surface";
+/**
+ * Not engine-shaped: this is the trip from a picker to a file beside the
+ * document, and it would be the same trip whichever engine rendered the line.
+ * The UI needs it because the picker lives on the UI side, next to the menu
+ * and the hotkey that opens it.
+ */
+export { saveLocalImage } from "./paste-image";
+export type { ImageTarget } from "./paste-image";

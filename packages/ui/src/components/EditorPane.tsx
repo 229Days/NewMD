@@ -65,6 +65,7 @@ export function EditorPane() {
   const spellcheck = useSettings((s) => s.settings.spellcheck);
   const mode = useUi((s) => s.mode);
   const reveal = useUi((s) => s.reveal);
+  const imageInsert = useUi((s) => s.imageInsert);
   // `t` resolves the locale when it is called, not when it is read here, so a
   // toast raised long after this render still comes out in the current one.
   const t = useT();
@@ -164,6 +165,15 @@ export function EditorPane() {
     if (reveal === null || !mounted) return;
     handleRef.current?.revealHeading(reveal.target);
   }, [reveal, mounted]);
+
+  // An image the action layer has already written to disk. Held the same way
+  // the outline's jump is: the command can fire before the surface is there to
+  // take it, and dropping it would leave a file on disk with nothing linking to
+  // it (ADR-0001 §2.5 本地路径插入).
+  useEffect(() => {
+    if (imageInsert === null || !mounted) return;
+    handleRef.current?.insertImage(imageInsert.image);
+  }, [imageInsert, mounted]);
 
   // Spellcheck is a handle method, not a DOM lookup: which element is editable
   // is the engine's business (ADR-0001 §2.3).
