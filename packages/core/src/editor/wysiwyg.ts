@@ -53,6 +53,7 @@ import { $markSchema, $nodeSchema, $prose, replaceAll } from "@milkdown/utils";
 import type { Root } from "mdast";
 import { SearchQuery, type SearchResult } from "prosemirror-search";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
 import type { Plugin as RemarkPlugin } from "unified";
 import type {
   FindMatch,
@@ -70,6 +71,7 @@ import {
   type FindGlue,
 } from "./find";
 import { inlineMarkHandlers, remarkInlineMarks } from "./inline-marks";
+import { renderMath } from "./math";
 import { inlineLinkReferences, stringifyOptions } from "./markdown";
 
 /**
@@ -292,6 +294,88 @@ const subscriptSchema = $markSchema("sub", () => ({
   },
 }));
 
+/**
+ * `$$…$$` — a display formula (ADR-0001 §2.4 常用扩展).
+ *
+ * mdast holds the formula as a string on a node with no children, so there is
+ * nothing here to edit: this is an atom, and the reader changes it in source
+ * mode. What the surface owes them is that it renders as mathematics rather
+ * than as a pair of dollar signs, and that the source comes back untouched.
+ *
+ * `meta` is the text a fence can carry after `$$` (`$$ theorem`), kept even
+ * though nothing renders it — dropping it would be a silent edit to a file the
+ * reader did not ask to change.
+ */
+const mathSchema = $nodeSchema("math", () => ({
+  group: "block",
+  atom: true,
+  selectable: true,
+  isolating: true,
+  defining: true,
+  attrs: {
+    value: { default: "", validate: "string" },
+    meta: { default: "", validate: "string" },
+  },
+  toDOM: (node) => renderMath(node.attrs.value, true),
+  parseDOM: [
+    {
+      tag: 'div[data-newmd-math="display"]',
+      getAttrs: (dom) => ({
+        value: dom instanceof Element ? (dom.getAttribute("data-math") ?? "") : "",
+        meta: "",
+      }),
+    },
+  ],
+  parseMarkdown: {
+    match: ({ type }) => type === "math",
+    runner: (state, node, type) => {
+      state.addNode(type, { value: String(node.value ?? ""), meta: String(node.meta ?? "") });
+    },
+  },
+  toMarkdown: {
+    match: (node) => node.type.name === "math",
+    runner: (state, node) => {
+      state.addNode("math", undefined, undefined, {
+        value: node.attrs.value,
+        // mdast spells "no meta" as null; the serializer skips either.
+        meta: node.attrs.meta || null,
+      });
+    },
+  },
+}));
+
+/** `$x^2$` inline — @see mathSchema for why this is an atom too. */
+const inlineMathSchema = $nodeSchema("inlineMath", () => ({
+  group: "inline",
+  inline: true,
+  atom: true,
+  selectable: true,
+  attrs: {
+    value: { default: "", validate: "string" },
+  },
+  toDOM: (node) => renderMath(node.attrs.value, false),
+  parseDOM: [
+    {
+      tag: 'span[data-newmd-math="inline"]',
+      getAttrs: (dom) => ({
+        value: dom instanceof Element ? (dom.getAttribute("data-math") ?? "") : "",
+      }),
+    },
+  ],
+  parseMarkdown: {
+    match: ({ type }) => type === "inlineMath",
+    runner: (state, node, type) => {
+      state.addNode(type, { value: String(node.value ?? "") });
+    },
+  },
+  toMarkdown: {
+    match: (node) => node.type.name === "inlineMath",
+    runner: (state, node) => {
+      state.addNode("inlineMath", undefined, undefined, { value: node.attrs.value });
+    },
+  },
+}));
+
 /** Where the cursor sits in the document, as a line and column of its text. */
 function lineColumn(text: string, offset: number): [number, number] {
   const before = text.slice(0, offset);
@@ -467,6 +551,9 @@ export async function createWysiwygEditor(
         // It contributes parser and serializer extensions rather than a
         // transformer, so where it sits among the three below changes nothing.
         { plugin: remarkGfm, options: { singleTilde: false } },
+        // Same registration the merge gate makes, so both pipelines parse the
+        // same spans of `$…$` as math.
+        { plugin: remarkMath, options: {} },
         // Reference resolution first: it rewrites `imageReference` into `image`,
         // and the strings below then normalise whatever it produced.
         { plugin: inlineLinkReferences, options: {} },
@@ -484,6 +571,8 @@ export async function createWysiwygEditor(
     .use(markSchema)
     .use(superscriptSchema)
     .use(subscriptSchema)
+    .use(mathSchema)
+    .use(inlineMathSchema)
     .use(gfmWithoutSingleTildeStrikes)
     .use(history)
     .use(

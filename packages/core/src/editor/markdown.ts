@@ -9,6 +9,7 @@
  */
 import type { Definition, Root } from "mdast";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
 import remarkParse from "remark-parse";
 import remarkStringify, { type Options } from "remark-stringify";
 import { unified, type Plugin } from "unified";
@@ -111,6 +112,14 @@ export const inlineLinkReferences: Plugin<[], Root> = () => (tree) => {
 const processor = unified()
   .use(remarkParse)
   .use(remarkGfm, { singleTilde: false })
+  // Math: `$x^2$` inline and `$$…$$` as a block (ADR-0001 §2.4 常用扩展).
+  //
+  // It registers as a tokenizer extension rather than a transformer, so its
+  // placement among the plugins below changes nothing — and nothing below can
+  // reach inside it either: a `math` node carries its source as a string with
+  // no children, which is what keeps `editor/inline-marks.ts` from reading the
+  // `^2^` in `$x^2$` as a superscript that was never typed.
+  .use(remarkMath)
   .use(inlineLinkReferences)
   .use(remarkInlineMarks)
   .use(remarkStringify, stringifyOptions);
