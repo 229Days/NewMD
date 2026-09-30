@@ -46,12 +46,13 @@ import {
   insertImageInputRule,
   remarkInlineLinkPlugin,
 } from "@milkdown/preset-commonmark";
-import { gfm } from "@milkdown/preset-gfm";
+import { gfm, remarkGFMPlugin } from "@milkdown/preset-gfm";
 import { Plugin, PluginKey, TextSelection } from "@milkdown/prose/state";
 import type { EditorView } from "@milkdown/prose/view";
 import { $markSchema, $nodeSchema, $prose, replaceAll } from "@milkdown/utils";
 import type { Root } from "mdast";
 import { SearchQuery, type SearchResult } from "prosemirror-search";
+import remarkGfm from "remark-gfm";
 import type { Plugin as RemarkPlugin } from "unified";
 import type {
   FindMatch,
@@ -97,6 +98,27 @@ const eatenByDefault: readonly unknown[] = [
 const commonmarkKeepingDefinitions = (commonmark as readonly unknown[]).filter(
   (entry) => !eatenByDefault.includes(entry),
 ) as typeof commonmark;
+
+/**
+ * GFM with its strikethrough un-registered, replaced below by the same plugin
+ * configured with `{ singleTilde: false }`.
+ *
+ * micromark *combines* extensions rather than letting a later one override an
+ * earlier one, so adding ours next to the preset's would leave both in play and
+ * the first would keep winning — the two entries have to be swapped, not
+ * extended. The identity comparison is the one `eatenByDefault` above already
+ * relies on, and for the same reason: the preset holds a `$remark` result
+ * flattened into its plugin function and its options slice, both of which
+ * match by identity and neither of which a type comparison would accept.
+ *
+ * Why the setting matters: a single tilde is subscript in this dialect
+ * (`H~2~O`), and GFM's default reads it as strikethrough — so with the preset's
+ * own copy in place the subscript would arrive at the schema as a `delete` and
+ * render struck through.
+ */
+const gfmWithoutSingleTildeStrikes = (gfm as readonly unknown[]).filter(
+  (entry) => entry !== remarkGFMPlugin.plugin && entry !== remarkGFMPlugin.options,
+) as typeof gfm;
 
 /**
  * Fill in the optional strings mdast leaves as `null`.
@@ -214,6 +236,58 @@ const markSchema = $markSchema("mark", () => ({
       // and writes them back through the handler in `inline-marks.ts`, so the
       // two halves of the hop cannot disagree about how it is spelled.
       state.withMark(mark, "mark");
+    },
+  },
+}));
+
+/**
+ * `^sup^` and `~sub~` (ADR-0001 §2.4 常用扩展).
+ *
+ * Same shape as the highlight for the same reason: mdast has no node type for
+ * them, the delimiters are recognised in `editor/inline-marks.ts`, and without
+ * a schema here the parse would hand ProseMirror nodes it has nowhere to put.
+ *
+ * `sup` and `sub` rather than styled spans because that is what the markup
+ * means — `<sup>`/`<sub>` are the elements browsers already render, and they
+ * carry the semantics a screen reader wants for an exponent or a formula
+ * suffix. `state.withMark(mark, "sup")` names the mdast type; the spelling of
+ * the caret is `inline-marks.ts`'s to keep.
+ */
+const superscriptSchema = $markSchema("sup", () => ({
+  parseDOM: [{ tag: "sup" }],
+  toDOM: () => ["sup", 0],
+  parseMarkdown: {
+    match: ({ type }) => type === "sup",
+    runner: (state, node, type) => {
+      state.openMark(type);
+      state.next(node.children);
+      state.closeMark(type);
+    },
+  },
+  toMarkdown: {
+    match: (mark) => mark.type.name === "sup",
+    runner: (state, mark) => {
+      state.withMark(mark, "sup");
+    },
+  },
+}));
+
+/** @see superscriptSchema — the same schema spelled with a tilde. */
+const subscriptSchema = $markSchema("sub", () => ({
+  parseDOM: [{ tag: "sub" }],
+  toDOM: () => ["sub", 0],
+  parseMarkdown: {
+    match: ({ type }) => type === "sub",
+    runner: (state, node, type) => {
+      state.openMark(type);
+      state.next(node.children);
+      state.closeMark(type);
+    },
+  },
+  toMarkdown: {
+    match: (mark) => mark.type.name === "sub",
+    runner: (state, mark) => {
+      state.withMark(mark, "sub");
     },
   },
 }));
@@ -389,6 +463,10 @@ export async function createWysiwygEditor(
       ctx.set(remarkStringifyOptionsCtx, stringifyOptions);
       ctx.update(remarkPluginsCtx, (list) => [
         ...list,
+        // The GFM the preset would have registered, minus single-tilde strikes.
+        // It contributes parser and serializer extensions rather than a
+        // transformer, so where it sits among the three below changes nothing.
+        { plugin: remarkGfm, options: { singleTilde: false } },
         // Reference resolution first: it rewrites `imageReference` into `image`,
         // and the strings below then normalise whatever it produced.
         { plugin: inlineLinkReferences, options: {} },
@@ -404,7 +482,9 @@ export async function createWysiwygEditor(
     .use(insertImageInputRule)
     .use(definitionSchema)
     .use(markSchema)
-    .use(gfm)
+    .use(superscriptSchema)
+    .use(subscriptSchema)
+    .use(gfmWithoutSingleTildeStrikes)
     .use(history)
     .use(
       changeWatcher((text) => {

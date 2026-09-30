@@ -57,6 +57,8 @@ const EXERCISES: Record<string, string[]> = {
   "inline-code.md": ["inlineCode"],
   "lists.md": ["list", "listItem"],
   "paragraph.md": ["paragraph"],
+  "strikethrough.md": ["delete"],
+  "subscript.md": ["sub", "sup"],
   "no-trailing-newline.md": ["paragraph"],
   "table.md": ["table", "tableRow", "tableCell"],
   "trailing-blank-lines.md": ["paragraph"],

@@ -102,9 +102,15 @@ export const inlineLinkReferences: Plugin<[], Root> = () => (tree) => {
 
 // GFM: tables, strikethrough, task lists, autolinks. Without it a table
 // parses as one paragraph and round-trips "perfectly" while being wrong.
+//
+// `singleTilde: false` hands a lone `~` back to `editor/inline-marks.ts` as
+// subscript instead of spending it on strikethrough. GitHub's own reading is
+// `~~` for a strike, and Typora's is `~x~` for a subscript, so this is the
+// dialect the app claims to speak — left on, `H~2~O` would parse as struck
+// through and M5's subscript would never get a chance to see it.
 const processor = unified()
   .use(remarkParse)
-  .use(remarkGfm)
+  .use(remarkGfm, { singleTilde: false })
   .use(inlineLinkReferences)
   .use(remarkInlineMarks)
   .use(remarkStringify, stringifyOptions);

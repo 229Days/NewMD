@@ -38,14 +38,28 @@ export interface InlineMarkSyntax {
 }
 
 /**
- * Every paired-delimiter mark the dialect supports.
+ * Every paired-delimiter mark the dialect supports, in the order they are
+ * looked for.
  *
- * A table rather than a branch per syntax: adding superscript is one row here
- * plus a schema in `wysiwyg.ts`, and the scanning rules are then provably the
- * same for every mark rather than reimplemented and re-tested.
+ * A table rather than a branch per syntax: adding a mark is one row here plus a
+ * schema in `wysiwyg.ts`, and the scanning rules are then provably the same for
+ * every mark rather than reimplemented and re-tested.
+ *
+ * `sub` before `sup` is not arbitrary. On `~a^b~` the other order opens a
+ * superscript at the caret, carries it through the tilde span as an opaque
+ * child and closes it at the trailing caret — writing `~a^b^~`, a spelling the
+ * reader never typed. Subscript first claims the tilde pair outright and leaves
+ * the caret alone, which round-trips byte for byte either way round.
+ *
+ * `~` being usable at all is a configuration decision, not a default: GFM's
+ * strikethrough treats a single tilde as a strike, so `H~2~O` would parse as
+ * struck-through text. Both pipelines turn that off with
+ * `{ singleTilde: false }` — see `markdown.ts` and `wysiwyg.ts`.
  */
 export const INLINE_MARKS: readonly InlineMarkSyntax[] = [
   { type: "mark", open: "==", close: "==" },
+  { type: "sub", open: "~", close: "~" },
+  { type: "sup", open: "^", close: "^" },
 ];
 
 /**
@@ -58,6 +72,9 @@ export const INLINE_MARKS: readonly InlineMarkSyntax[] = [
  * way to express and that could never be written back.
  */
 const PHRASING_CONTAINERS: ReadonlySet<string> = new Set([
+  // The marks built here included: they hold phrasing content like any other,
+  // and without them a delimiter nested inside one would never be looked at.
+  ...INLINE_MARKS.map((syntax) => syntax.type),
   "paragraph",
   "heading",
   "tableCell",
@@ -174,14 +191,22 @@ function walk(node: Root | Nodes): void {
   // Depth first: a mark inside emphasis is settled before the outer level
   // treats that emphasis as one opaque child.
   for (const child of node.children) walk(child);
-  if (PHRASING_CONTAINERS.has(node.type)) {
-    let children = node.children as Nodes[];
-    for (const syntax of INLINE_MARKS) children = applySyntax(children, syntax);
+  if (!PHRASING_CONTAINERS.has(node.type)) return;
+  for (const syntax of INLINE_MARKS) {
+    const children = applySyntax(node.children as Nodes[], syntax);
     // Cast rather than assignment: `Root.children` and `Nodes.children` are
     // disjoint unions, and `node` here is the wider of the two even though the
     // set above has already ruled `Root` out. Narrowing on a set membership is
     // not something the type system does.
     (node as { children: Nodes[] }).children = children;
+    // A node this pass just built has not met the remaining syntaxes — the walk
+    // at the top ran before it existed — so `==E = mc^2^==` would keep its
+    // superscript as literal text while the outer highlight round-tripped
+    // perfectly. Only the type this pass makes is re-entered: everything else
+    // in `children` was either walked already or is untouched by this pass.
+    for (const child of children) {
+      if (child.type === syntax.type) walk(child);
+    }
   }
 }
 
