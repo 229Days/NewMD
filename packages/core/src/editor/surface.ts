@@ -19,8 +19,10 @@ import type {
   MarkdownEditorOptions,
   MarkdownSurface,
 } from "./handle";
+import { PlatformError } from "../platform";
+import type { ImageTarget } from "./paste-image";
 import { createSourceEditor } from "./codemirror";
-import { imageFileOf, savePastedImage } from "./paste-image";
+import { carriesFiles, imageFileOf, imageFilesIn, savePastedImage } from "./paste-image";
 import { createWysiwygEditor } from "./wysiwyg";
 
 /**
@@ -36,6 +38,19 @@ export async function createMarkdownEditor(
   let mode: MarkdownEditorMode = options.mode ?? "wysiwyg";
   let spellcheck = options.spellcheck !== false;
   let handle: MarkdownEditorHandle = await mount(mode, options.doc);
+
+  /**
+   * Write one image into `target`'s `./assets/` and put its relative path at
+   * the cursor.
+   *
+   * `handle` is read inside rather than captured now: the surface can swap
+   * engines while the write is in flight, and the path belongs in whichever one
+   * is live when it lands.
+   */
+  const place = async (file: File, target: ImageTarget): Promise<void> => {
+    const relative = await savePastedImage(target, file);
+    handle.insertImage({ url: relative, alt: "" });
+  };
 
   /**
    * Write a pasted image to disk, then put its relative path at the cursor.
@@ -60,15 +75,69 @@ export async function createMarkdownEditor(
     if (file === null || target === null) return;
     event.preventDefault();
     event.stopPropagation();
-
-    // `handle` is read inside the callback rather than captured now: the
-    // surface can swap engines while the write is in flight, and the path
-    // belongs in whichever one is live when it lands.
-    void savePastedImage(target, file)
-      .then((relative) => handle.insertImage({ url: relative, alt: "" }))
-      .catch((error: unknown) => options.onImageError?.(error));
+    void place(file, target).catch((error: unknown) => options.onImageError?.(error));
   };
   options.parent.addEventListener("paste", onPaste, { capture: true });
+
+  /**
+   * Accept a file drag over the editor, so a `drop` is allowed to happen.
+   *
+   * Only for `Files`: cancelling `dragover` for every drag would also cancel
+   * the browser's handling of a text selection being dragged, which is not
+   * something to interfere with in exchange for a case that never arises here.
+   */
+  const onDragOver = (event: DragEvent): void => {
+    const types = event.dataTransfer?.types;
+    if (!types) return;
+    for (let i = 0; i < types.length; i += 1) {
+      if (types[i] !== "Files") continue;
+      event.preventDefault();
+      return;
+    }
+  };
+  options.parent.addEventListener("dragover", onDragOver, { capture: true });
+
+  /**
+   * Take a dropped file, or stop the browser taking the tab instead.
+   *
+   * Same capture-phase rationale as `paste`, plus one reason that is specific
+   * to dropping: a document that does not cancel a file drop navigates to that
+   * file, so the unsaved edits go with it. That makes cancellation
+   * unconditional on a drop carrying *any* file, including one this editor has
+   * no use for — doing nothing with a `.docx` is a better outcome than losing
+   * the document over it.
+   *
+   * Unlike `paste`, an image with nowhere to go is reported rather than left to
+   * the browser: there is no browser behaviour worth falling back to here, so a
+   * silent drop would just be a picture that vanished.
+   */
+  const onDrop = (event: DragEvent): void => {
+    if (!carriesFiles(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+
+    const transfer = event.dataTransfer;
+    if (!transfer) return;
+    const images = imageFilesIn(transfer);
+    if (images.length === 0) return;
+
+    const target = options.imageTarget?.() ?? null;
+    if (target === null) {
+      options.onImageError?.(
+        new PlatformError("No directory to place a dropped image beside: this file is unsaved"),
+      );
+      return;
+    }
+    // Chained rather than fired together: three images in one gesture should
+    // arrive as three lines in the order they were picked, and each insertion
+    // lands at wherever the cursor was left by the last.
+    let chain: Promise<void> = Promise.resolve();
+    for (const file of images) {
+      chain = chain.then(() => place(file, target));
+    }
+    void chain.catch((error: unknown) => options.onImageError?.(error));
+  };
+  options.parent.addEventListener("drop", onDrop, { capture: true });
 
   /**
    * Boot one engine with the state that has to survive the swap.
@@ -159,6 +228,8 @@ export async function createMarkdownEditor(
     },
     async destroy() {
       options.parent.removeEventListener("paste", onPaste, { capture: true });
+      options.parent.removeEventListener("dragover", onDragOver, { capture: true });
+      options.parent.removeEventListener("drop", onDrop, { capture: true });
       await handle.destroy();
     },
   };
