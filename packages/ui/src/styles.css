@@ -164,3 +164,40 @@ body {
 [data-newmd-frontmatter] [data-value] {
   color: var(--fg);
 }
+
+/*
+ * Mermaid (ADR-0001 §2.4).
+ *
+ * The drawing sits in front of the source, which stays in the document until
+ * a diagram lands on top of it — and stays on screen if one never does. No
+ * copy here on purpose: the engine's DOM carries no words either, so nothing
+ * on this block has to be translated.
+ */
+[data-newmd-mermaid] {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  padding: 12px;
+  margin-block: 1.25em;
+}
+
+[data-newmd-mermaid] [data-diagram] {
+  display: flex;
+  justify-content: center;
+  overflow-x: auto;
+}
+
+[data-newmd-mermaid] [data-diagram] svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* The source is a fallback, not a second reading of the block. */
+[data-newmd-mermaid][data-rendered="ok"] pre {
+  display: none;
+}
+
+/* A fence that would not draw: the source as it was, marked. */
+[data-newmd-mermaid][data-rendered="error"] {
+  border-color: var(--danger);
+}

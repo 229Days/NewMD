@@ -41,6 +41,7 @@ import {
 import type { Ctx } from "@milkdown/ctx";
 import { history, redoCommand, undoCommand } from "@milkdown/plugin-history";
 import {
+  codeBlockAttr,
   commonmark,
   insertImageCommand,
   insertImageInputRule,
@@ -72,6 +73,7 @@ import {
   type FindGlue,
 } from "./find";
 import { inlineMarkHandlers, remarkInlineMarks } from "./inline-marks";
+import { drawMermaid } from "./mermaid";
 import { renderMath } from "./math";
 import { inlineLinkReferences, stringifyOptions } from "./markdown";
 
@@ -297,6 +299,153 @@ const frontMatterSchema = $nodeSchema("yaml", () => ({
     match: (node) => node.type.name === "yaml",
     runner: (state, node) => {
       state.addNode("yaml", undefined, undefined, { value: node.attrs.value });
+    },
+  },
+}));
+
+/**
+ * The commonmark preset's code block, replaced rather than extended.
+ *
+ * Two things it has to do that the preset's does not:
+ *
+ * 1. **Keep `meta`** — whatever follows the fence info string
+ *    (`` ```ts title=x ``). The preset writes only `lang`, so a file opened in
+ *    WYSIWYG and saved again lost that text. `tests/golden/fence-meta.md` is
+ *    the corpus half of the fix; this is the half only the engine can do.
+ * 2. **Hand a mermaid fence to `mermaidSchema` below.** It has to happen here
+ *    because this node owns the mdast `code` type: the parser walks the
+ *    registered schemas and takes the first `match` that is true, and this one
+ *    was registered by the preset before anything of ours existed. So `match`
+ *    here claims every fence *except* mermaid and leaves those to the narrower
+ *    match below.
+ *
+ * The rest — the attributes a theme restyles the `<pre>` and `<code>` with,
+ * `preserveWhitespace` on paste, the input rule that opens a fence — is the
+ * preset's, carried over unchanged.
+ */
+const codeBlockSchema = $nodeSchema("code_block", (ctx) => ({
+  content: "text*",
+  group: "block",
+  marks: "",
+  defining: true,
+  code: true,
+  attrs: {
+    language: { default: "", validate: "string" },
+    meta: { default: "", validate: "string" },
+  },
+  parseDOM: [
+    {
+      tag: "pre",
+      preserveWhitespace: "full",
+      getAttrs: (dom) => {
+        // `null` rather than a throw: a `<pre>` that is not an element cannot
+        // be one of these, and returning null is how a parse rule declines.
+        if (!(dom instanceof HTMLElement)) return null;
+        return { language: dom.dataset.language ?? "", meta: "" };
+      },
+    },
+  ],
+  toDOM: (node) => {
+    const attr = ctx.get(codeBlockAttr.key)(node);
+    const language = node.attrs.language as string;
+    return [
+      "pre",
+      { ...attr.pre, ...(language ? { "data-language": language } : {}) },
+      ["code", attr.code, 0],
+    ];
+  },
+  parseMarkdown: {
+    match: (node) => node.type === "code" && node.lang !== "mermaid",
+    runner: (state, node, type) => {
+      // Milkdown hands the mdast node over as an indexed record, so every
+      // field arrives as `unknown` and has to be read back as what a fence
+      // actually carries.
+      const language = typeof node.lang === "string" ? node.lang : "";
+      const meta = typeof node.meta === "string" ? node.meta : "";
+      const value = typeof node.value === "string" ? node.value : "";
+      state.openNode(type, { language, meta });
+      if (value) state.addText(value);
+      state.closeNode();
+    },
+  },
+  toMarkdown: {
+    match: (node) => node.type.name === "code_block",
+    runner: (state, node) => {
+      state.addNode("code", undefined, node.content.firstChild?.text || "", {
+        lang: node.attrs.language,
+        meta: node.attrs.meta || null,
+      });
+    },
+  },
+}));
+
+/**
+ * A ` ```mermaid ` fence, drawn as a diagram (ADR-0001 §2.4 可选扩展).
+ *
+ * An atom, like the other constructs here whose source the reader edits in
+ * source mode: ProseMirror holds the source as an attribute and `toDOM` hands
+ * it to `drawMermaid`. Keeping it out of `content` is what lets the drawing
+ * take the block's place instead of fighting an editable `<pre>` over it —
+ * though the source stays in the DOM behind the picture, for the fallback
+ * §2.4 互操作策略 asks for and for a fence that will not draw.
+ *
+ * `meta` rides along for the reason it does on the code block: text the reader
+ * wrote after the info string, which dropping would be a silent edit on save.
+ */
+const mermaidSchema = $nodeSchema("mermaid", () => ({
+  group: "block",
+  atom: true,
+  selectable: true,
+  isolating: true,
+  defining: true,
+  attrs: {
+    value: { default: "", validate: "string" },
+    meta: { default: "", validate: "string" },
+  },
+  toDOM: (node) => {
+    const host = document.createElement("div");
+    host.setAttribute("data-newmd-mermaid", "");
+    host.setAttribute("data-language", "mermaid");
+    const source = document.createElement("pre");
+    const code = document.createElement("code");
+    code.textContent = node.attrs.value;
+    source.append(code);
+    host.append(source);
+    // Fire and forget: `toDOM` is synchronous and Mermaid is not, so the
+    // drawing lands in this element whenever it is ready.
+    void drawMermaid(host, node.attrs.value);
+    return host;
+  },
+  parseDOM: [
+    {
+      tag: "div[data-newmd-mermaid]",
+      getAttrs: (dom) => {
+        if (!(dom instanceof Element)) return null;
+        return { value: dom.querySelector("code")?.textContent ?? "", meta: "" };
+      },
+    },
+  ],
+  parseMarkdown: {
+    match: (node) => node.type === "code" && node.lang === "mermaid",
+    runner: (state, node, type) => {
+      // `unknown` fields, read back as the strings a fence carries — same as
+      // the code block above.
+      state.addNode(type, {
+        value: typeof node.value === "string" ? node.value : "",
+        meta: typeof node.meta === "string" ? node.meta : "",
+      });
+    },
+  },
+  toMarkdown: {
+    match: (node) => node.type.name === "mermaid",
+    runner: (state, node) => {
+      // Written back as the mdast node it arrived as, so remark-stringify's own
+      // `code` handler draws the fence. A second spelling of "how a fence is
+      // written" here would be a second thing to keep in step with it.
+      state.addNode("code", undefined, node.attrs.value, {
+        lang: "mermaid",
+        meta: node.attrs.meta || null,
+      });
     },
   },
 }));
@@ -664,6 +813,11 @@ export async function createWysiwygEditor(
       ]);
     })
     .use(commonmarkKeepingDefinitions)
+    // Same node name as the preset's above, and the schema map is keyed by
+    // name, so the later registration is the one that takes effect.
+    .use(codeBlockSchema)
+    // Takes the fences that one deliberately leaves alone.
+    .use(mermaidSchema)
     // See the file header: this one is exported but not in the preset.
     .use(insertImageInputRule)
     .use(definitionSchema)
