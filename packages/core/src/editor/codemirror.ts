@@ -30,6 +30,7 @@ import { highlightSelectionMatches, SearchQuery, selectNextOccurrence } from "@c
 import { EditorSelection, EditorState, type Extension } from "@codemirror/state";
 import {
   EditorView,
+  crosshairCursor,
   drawSelection,
   highlightActiveLine,
   highlightActiveLineGutter,
@@ -126,8 +127,21 @@ export function createMarkdownExtensions(options: {
     highlightActiveLine(),
     highlightSpecialChars(),
     history(),
+    // Several carets, and the one piece of it CodeMirror does not turn on by
+    // itself. `applyTransaction` reads this facet and, when it is absent, keeps
+    // `tr.newSelection.asSingle()` — so a gesture that grows a second range
+    // appears to work once and then quietly loses it in the transaction that
+    // creates it. Nothing in `@codemirror/*` sets it, and neither did this app.
+    EditorState.allowMultipleSelections.of(true),
     drawSelection(),
     rectangularSelection(),
+    // The key that grows a caret, for all three ways of asking: click, drag,
+    // and the crosshair that says a drag is available. CodeMirror's own default
+    // is Ctrl on Windows and Linux and Cmd on a Mac — a different key from the
+    // other two gestures, and a different one per machine. `crosshairCursor`
+    // already answers Alt; this is the half that was talking about Ctrl.
+    EditorView.clickAddsSelectionRange.of((event) => event.altKey),
+    crosshairCursor(),
     indentOnInput(),
     bracketMatching(),
     highlightSelectionMatches(),
