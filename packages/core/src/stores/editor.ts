@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { getPlatform } from "../platform";
+import { pathAfterMove } from "../platform/path";
 import type { JsonValue } from "../platform/types";
 import {
   applyNewlines,
@@ -68,6 +69,14 @@ export interface EditorState {
    * §2.8). For the active document this is `updateContent` addressed by path.
    */
   patchContent(path: string, content: string): void;
+  /**
+   * Follow a rename: every tab (and recent entry) the move reached now names
+   * the path its file is at.
+   *
+   * Called **before** the disk move, and deliberately so — see `renameEntry`.
+   * Reversible: running it back with the arguments swapped undoes it.
+   */
+  followRename(from: string, to: string): void;
   /** Persist the active tab, asking for a path only when it has none. */
   save(): Promise<boolean>;
   /** Pick a path and persist. Returns false if the dialog was cancelled. */
@@ -284,6 +293,35 @@ export const useEditor = create<EditorState>()((set, get) => ({
     const normalized = normalizeNewlines(content);
     if (doc.content === normalized) return;
     commit(set, replaceTab(get().tabs, doc, { content: normalized }), get().activeIndex);
+  },
+
+  followRename(from, to) {
+    const platform = getPlatform();
+
+    // A tab that has never been saved has no path to move, and the name of an
+    // unsaved buffer is the reader's, not the filesystem's.
+    const tabs = get().tabs.map((tab) => {
+      if (tab.path === null) return tab;
+      const moved = pathAfterMove(tab.path, from, to);
+      return moved === null
+        ? tab
+        : { ...tab, path: moved, fileName: platform.pathFileName(moved) ?? tab.fileName };
+    });
+
+    const recent = get().recent.map((entry) => {
+      const moved = pathAfterMove(entry.path, from, to);
+      return moved === null
+        ? entry
+        : { ...entry, path: moved, name: platform.pathFileName(moved) ?? entry.name };
+    });
+
+    // The list keeps its order, so the active index still points at the tab it
+    // did — which is how the reader stays in the document they were in.
+    commit(set, tabs, get().activeIndex);
+    set({ recent });
+    void platform.writeAppData(RECENT_KEY, recent).catch(() => {
+      // The recent list is a convenience; a rename is not about it.
+    });
   },
 
   async save() {

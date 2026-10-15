@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   isAbsolute,
+  pathAfterMove,
   pathBaseName,
   pathExtension,
   pathFileName,
@@ -187,5 +188,57 @@ describe("pathRelative", () => {
     expect(pathRelative("C:\\notes", "c:\\notes\\a.md")).toBe("./a.md");
     expect(pathRelative("\\notes", "/notes/a.md")).toBe("./a.md");
     expect(pathRelative("\\\\server\\share\\a", "\\\\server\\share\\b\\c.md")).toBe("../b/c.md");
+  });
+});
+
+/**
+ * Following a rename (ADR-0003 §2.2).
+ *
+ * One operation, whatever it is called: `from` becomes `to`, and every path
+ * that was at or under `from` is now somewhere else. A file rename is the case
+ * where the answer is `to` itself; a folder rename is the case where a whole
+ * subtree keeps its shape under a new name.
+ */
+describe("pathAfterMove", () => {
+  it("gives the new path of the file that moved", () => {
+    expect(pathAfterMove("C:\\notes\\a.md", "C:\\notes\\a.md", "C:\\notes\\sub\\a.md")).toBe(
+      "C:\\notes\\sub\\a.md",
+    );
+  });
+
+  it("gives the new path of anything that sat inside a folder that moved", () => {
+    expect(pathAfterMove("C:\\notes\\old\\x\\y.md", "C:\\notes\\old", "C:\\notes\\new")).toBe(
+      "C:\\notes\\new\\x\\y.md",
+    );
+  });
+
+  it("gives the new path of the folder itself", () => {
+    expect(pathAfterMove("C:\\notes\\old", "C:\\notes\\old", "C:\\notes\\new")).toBe(
+      "C:\\notes\\new",
+    );
+  });
+
+  it("says nothing about a path the move did not reach", () => {
+    // The caller distinguishes "moved" from "not mine" by null, so `from`
+    // itself must not come back as a path that merely happens to be unchanged.
+    expect(pathAfterMove("C:\\notes\\other.md", "C:\\notes\\old", "C:\\notes\\new")).toBeNull();
+    expect(pathAfterMove("C:\\other.md", "C:\\notes\\a.md", "C:\\notes\\b.md")).toBeNull();
+  });
+
+  it("does not mistake a name that starts the same for the folder itself", () => {
+    // `oldish` is not inside `old`, and `a.md.bak` is not the file that moved.
+    expect(pathAfterMove("C:\\notes\\oldish\\x.md", "C:\\notes\\old", "C:\\notes\\new")).toBeNull();
+    expect(pathAfterMove("C:\\notes\\a.md.bak", "C:\\notes\\a.md", "C:\\notes\\b.md")).toBeNull();
+  });
+
+  it("says nothing about a path on another root", () => {
+    // No `..` reaches across roots, so this path did not move with anything.
+    expect(pathAfterMove("D:\\other\\x.md", "C:\\notes\\old", "C:\\notes\\new")).toBeNull();
+  });
+
+  it("follows a move onto another root when it is the file itself", () => {
+    // The one case that does cross: `from` is the path, so the answer is `to`
+    // whatever root it is on. The caller decides whether it can be written.
+    expect(pathAfterMove("C:\\notes\\a.md", "C:\\notes\\a.md", "D:\\a.md")).toBe("D:\\a.md");
   });
 });

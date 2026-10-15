@@ -9,6 +9,7 @@ export {
 } from "./platform";
 export {
   isAbsolute,
+  pathAfterMove,
   pathBaseName,
   pathExtension,
   pathFileName,
@@ -65,3 +66,6 @@ export {
   startSessionPersistence,
   stopSessionPersistence,
 } from "./session";
+
+// Renaming, and what it does to the rest of the workspace (ADR-0003).
+export { renameEntry, rewriteAfterRename, type RenameRewriteReport } from "./rename";

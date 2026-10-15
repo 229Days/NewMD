@@ -17,7 +17,7 @@
  * change are the destinations themselves (ADR-0003 §2.4).
  */
 import type { Definition, Image, Link, Root, RootContent } from "mdast";
-import { isAbsolute, pathJoin, pathParent, pathRelative } from "../platform/path";
+import { isAbsolute, pathAfterMove, pathJoin, pathParent, pathRelative } from "../platform/path";
 import { parse } from "./markdown";
 
 export interface RenameChange {
@@ -68,7 +68,7 @@ export function rewriteReferences(source: string, change: RenameChange): Rewrite
   // Where the document was, read off the move: a document that is not inside
   // the destination did not move, and only its own directory matters to its
   // outbound links — renaming a file in place leaves them all resolving.
-  const was = pathParent(remap(documentPath, to, from) ?? documentPath) ?? documentPath;
+  const was = pathParent(pathAfterMove(documentPath, to, from) ?? documentPath) ?? documentPath;
 
   const replacements: Replacement[] = [];
   let rewritten = 0;
@@ -82,7 +82,7 @@ export function rewriteReferences(source: string, change: RenameChange): Rewrite
     // respelled for another reason — otherwise every rename would rewrite the
     // spelling of unrelated links in every document it scanned.
     const target = pathJoin(was, split.path);
-    const moved = remap(target, from, to);
+    const moved = pathAfterMove(target, from, to);
     if (moved === null && was === directory) continue;
 
     const found = locate(source, node, node.url);
@@ -107,21 +107,6 @@ export function rewriteReferences(source: string, change: RenameChange): Rewrite
   }
 
   return { text: splice(source, replacements), rewritten, unrewritten };
-}
-
-/**
- * Where `path` ends up once `from` has become `to`, or null when the move does
- * not concern it.
- *
- * Containment falls out of the same function: a path inside the subtree reads
- * back as `./…`, a path outside walks out with `../`, and a path on another
- * root comes back absolute. The first is the remap; the other two are the two
- * ways of saying no.
- */
-function remap(path: string, from: string, to: string): string | null {
-  const relative = pathRelative(from, path);
-  if (isAbsolute(relative) || relative.startsWith("../")) return null;
-  return pathJoin(to, relative);
 }
 
 /** A destination split into the path to respell and the `#…` / `?…` that rides along. */

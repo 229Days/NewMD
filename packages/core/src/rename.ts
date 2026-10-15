@@ -78,6 +78,40 @@ async function documentsUnder(root: string): Promise<string[]> {
 }
 
 /**
+ * Rename a file or a folder, and bring everything that depended on the old name
+ * along with it.
+ *
+ * The order below is the design, not an implementation detail:
+ *
+ *   1. the tabs move first — autosave writes the path a tab holds, and the
+ *      filesystem call underneath creates missing parent folders, so a tab left
+ *      on the old path puts the file back there on the next tick;
+ *   2. then the disk moves, and if it refuses, the tabs go back: they are the
+ *      only thing that moved by then, and a tab on a path that does not exist
+ *      writes a file into being;
+ *   3. then the tree, whose re-read has to see a disk the move already happened
+ *      on;
+ *   4. and last the references, which read the moved document from the
+ *      directory it now lives in — the one its own links resolve against.
+ *
+ * Returns what the rewrite did, for the caller to report.
+ */
+export async function renameEntry(from: string, to: string): Promise<RenameRewriteReport> {
+  const platform = getPlatform();
+
+  useEditor.getState().followRename(from, to);
+  try {
+    await platform.renamePath(from, to);
+  } catch (error) {
+    useEditor.getState().followRename(to, from);
+    throw error;
+  }
+
+  await useWorkspace.getState().followRename(from, to);
+  return rewriteAfterRename(from, to);
+}
+
+/**
  * Respell every reference the move invalidated, across the workspace and every
  * open tab.
  *

@@ -169,3 +169,25 @@ export function pathRelative(fromDir: string, to: string): string {
   const tail = target.parts.slice(common).join("/");
   return `${ups === 0 ? "./" : "../".repeat(ups)}${tail}`;
 }
+
+/**
+ * Where `path` ends up once `from` has become `to`, or null when the move never
+ * reached it.
+ *
+ * One operation covers both names for it: a file rename is the case where the
+ * answer is `to` itself, and a folder rename is the case where a subtree keeps
+ * its shape under a new one. Nothing here distinguishes them, because nothing
+ * needs to (ADR-0003 §2.2).
+ *
+ * Containment falls out of `pathRelative`: a path at or under `from` reads back
+ * as `./…`, and the two ways of saying no — a path outside, a path on another
+ * root — read back as `../…` and as an absolute path. **Null does not mean
+ * "unchanged"**, so a caller that keeps the path it passed in must say so
+ * itself; that is the difference between "not mine" and "mine, and it did not
+ * have to move".
+ */
+export function pathAfterMove(path: string, from: string, to: string): string | null {
+  const relative = pathRelative(from, path);
+  if (isAbsolute(relative) || relative.startsWith("../")) return null;
+  return pathJoin(to, relative);
+}

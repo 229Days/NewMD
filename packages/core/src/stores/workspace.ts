@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { getPlatform } from "../platform";
+import { pathAfterMove } from "../platform/path";
 import { isMarkdownFile, type FileEntry } from "../types";
 import { useEditor } from "./editor";
 
@@ -96,6 +97,16 @@ export interface WorkspaceState {
   openFile(path: string): Promise<void>;
   /** Show a folder's children, or hide them again. Reads it on the first open. */
   toggleDir(path: string): Promise<void>;
+  /**
+   * Follow a rename through the cached listings.
+   *
+   * The cache is keyed by directory path, so a folder rename invalidates every
+   * key underneath it as well as the paths inside each listing — and the two
+   * folders either side of the move need re-reading, because the row for the
+   * renamed entry is one they lost and one they gained. Call this **after** the
+   * disk has moved, or the re-read finds the world it just left.
+   */
+  followRename(from: string, to: string): Promise<void>;
 }
 
 export const useWorkspace = create<WorkspaceState>()((set, get) => ({
@@ -150,6 +161,38 @@ export const useWorkspace = create<WorkspaceState>()((set, get) => ({
 
   async openFile(path) {
     await useEditor.getState().openPath(path);
+  },
+
+  async followRename(from, to) {
+    const { entries, expanded } = get();
+
+    const moved: Record<string, FileEntry[]> = {};
+    for (const [dir, children] of Object.entries(entries)) {
+      moved[pathAfterMove(dir, from, to) ?? dir] = children.map((entry) => ({
+        ...entry,
+        // The row's own name is left as it was: this listing is either about to
+        // be re-read (the two folders either side of the move) or is one whose
+        // rows did not change name (a subtree that moved whole).
+        path: pathAfterMove(entry.path, from, to) ?? entry.path,
+      }));
+    }
+    set({
+      entries: moved,
+      expanded: expanded.map((dir) => pathAfterMove(dir, from, to) ?? dir),
+    });
+
+    // The folders either side of the move are the two whose contents changed
+    // without moving themselves.
+    const platform = getPlatform();
+    const parents = [platform.pathParent(from), platform.pathParent(to)];
+    for (const dir of new Set(parents)) {
+      if (dir === null || get().entries[dir] === undefined) continue;
+      try {
+        set({ entries: { ...get().entries, [dir]: usable(await platform.listDir(dir)) } });
+      } catch {
+        // Gone from under us. The relocation above is still the better answer.
+      }
+    }
   },
 
   async toggleDir(path) {

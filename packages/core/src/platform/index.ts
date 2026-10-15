@@ -13,6 +13,7 @@ export { getPlatform, isPlatformRegistered, resetPlatform, setPlatform } from ".
 export { createBrowserAdapter } from "./browser";
 export {
   isAbsolute,
+  pathAfterMove,
   pathBaseName,
   pathExtension,
   pathFileName,
