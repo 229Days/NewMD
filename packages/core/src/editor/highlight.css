@@ -1,0 +1,23 @@
+/*
+ * The dark half of Shiki's dual theme (ADR-0001 §2.6, §2.11).
+ *
+ * Every token span comes out of `highlight.ts` carrying its light colour in a
+ * plain `color` and its dark colour in `--shiki-dark`. This one rule is what
+ * reads the second one, which is why the two files travel together: without
+ * this, a dark document is lit by a light theme and nothing says so.
+ *
+ * Flipping a custom property rather than re-tokenising is the whole point —
+ * the app's theme is a `[data-theme]` attribute on the root, and switching it
+ * repaints every open tab without Shiki being asked anything. `mermaid.ts`
+ * cannot do this, because the colours it needs are baked into a drawing by a
+ * library that has already run; a code block is text, so it can.
+ *
+ * `!important` is not laziness: the light colour is written into the element's
+ * own `style` attribute, and no selector outranks that. Shiki's own dual-theme
+ * docs specify the rule this way for the same reason. The light colour stays
+ * inline so that a block keeps its colour even where this file never loads —
+ * a copy of the markup pasted somewhere else, say.
+ */
+[data-theme="dark"] [data-newmd-token] {
+  color: var(--shiki-dark) !important;
+}

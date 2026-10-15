@@ -48,8 +48,9 @@ import {
   remarkInlineLinkPlugin,
 } from "@milkdown/preset-commonmark";
 import { gfm, remarkGFMPlugin } from "@milkdown/preset-gfm";
+import type { Node as ProseNode } from "@milkdown/prose/model";
 import { Plugin, PluginKey, TextSelection } from "@milkdown/prose/state";
-import type { EditorView } from "@milkdown/prose/view";
+import { Decoration, DecorationSet, type EditorView } from "@milkdown/prose/view";
 import { $markSchema, $nodeSchema, $prose, $view, replaceAll } from "@milkdown/utils";
 import type { Root } from "mdast";
 import { SearchQuery, type SearchResult } from "prosemirror-search";
@@ -72,6 +73,7 @@ import {
   stepForward,
   type FindGlue,
 } from "./find";
+import { highlight, highlighted } from "./highlight";
 import { inlineMarkHandlers, remarkInlineMarks } from "./inline-marks";
 import { drawMermaid } from "./mermaid";
 import { renderMath } from "./math";
@@ -881,6 +883,130 @@ function changeWatcher(
   });
 }
 
+const codeHighlightKey = new PluginKey("newmd-code-highlight");
+
+/**
+ * Draw every fence with the colours Shiki read out of it (ADR-0001 §2.6).
+ *
+ * **Decorations, not a node view.** The block has to stay the reader's own
+ * text: editable where it stands, one undo history, serialised by the same
+ * serializer as everything else. A node view owning the markup would have to
+ * hand all of that back by hand, and the first thing it would break is the
+ * round-trip gate. Inline decorations say only how to draw a range, so the
+ * document is untouched — which is also why `getContent()` cannot tell whether
+ * this plugin ran at all, and why `tests/highlight.test.ts` has to ask the DOM.
+ *
+ * **Async, and stale rather than empty.** One keystroke makes every token in
+ * that block wrong at once. Clearing the colours to wait for the new ones would
+ * rebuild the spans around the caret on every character, so the previous
+ * decorations are mapped through the change instead and stay on screen until
+ * the new tokens land. `ensure` then drops its own refresh if the document
+ * moved on while Shiki was working — whoever holds the document now owns it.
+ */
+function codeHighlight() {
+  return $prose(() => {
+    /** The fences the current decorations were built against. */
+    let confirmed: string | null = null;
+    /** Cleared when the editor goes away, so a late answer cannot dispatch. */
+    let alive = true;
+
+    /** Every fence in `doc`, with the text and language Shiki has to read. */
+    const fences = (doc: ProseNode): { code: string; language: string }[] => {
+      const found: { code: string; language: string }[] = [];
+      doc.descendants((node) => {
+        if (node.type.name !== "code_block") return true;
+        found.push({ code: node.textContent, language: String(node.attrs.language ?? "") });
+        // A fence's text is its whole content, so there is nothing below it.
+        return false;
+      });
+      return found;
+    };
+
+    /**
+     * What a document's fences look like, as one string to compare against.
+     *
+     * Positions are left out on purpose: they are read fresh at build time, and
+     * including them would make an edit above a block look like a change of
+     * subject and send the whole document back to Shiki.
+     */
+    const signature = (found: { code: string; language: string }[]): string =>
+      found.map((fence) => `${fence.language}\u0000${fence.code}`).join("\u0001");
+
+    /** The decorations we can honestly draw: the fences Shiki has answered for. */
+    const build = (doc: ProseNode): DecorationSet => {
+      const decorations: Decoration[] = [];
+      doc.descendants((node, pos) => {
+        if (node.type.name !== "code_block") return true;
+        const tokens = highlighted(node.textContent, String(node.attrs.language ?? ""));
+        if (tokens) {
+          // Positions are UTF-16 units on both sides — ProseMirror counts them
+          // and so does Shiki's `offset` — so a token lands where it started.
+          // `pos + 1` is the first character inside the node.
+          const start = pos + 1;
+          for (const token of tokens) {
+            if (token.text === "") continue;
+            decorations.push(
+              Decoration.inline(start + token.offset, start + token.offset + token.text.length, {
+                "data-newmd-token": "",
+                style: token.style,
+              }),
+            );
+          }
+        }
+        return false;
+      });
+      return DecorationSet.create(doc, decorations);
+    };
+
+    /** Ask Shiki about anything new, and repaint once all of it has answered. */
+    const ensure = (view: EditorView): void => {
+      // Read once and carry it: this runs on every transaction, and the check
+      // below throws the result away almost every time.
+      const reading = fences(view.state.doc);
+      const wanted = signature(reading);
+      if (wanted === confirmed) return;
+      confirmed = wanted;
+      void Promise.all(reading.map((fence) => highlight(fence.code, fence.language))).then(() => {
+        // Every fence of the signature has to be in hand before the repaint, or
+        // a block that is merely slower than its neighbour would lose its
+        // colours on the way past.
+        if (!alive || signature(fences(view.state.doc)) !== wanted) return;
+        view.dispatch(view.state.tr.setMeta(codeHighlightKey, true).setMeta("addToHistory", false));
+      });
+    };
+
+    return new Plugin({
+      key: codeHighlightKey,
+      state: {
+        init: (_config, state) => build(state.doc),
+        apply: (tr, previous) => {
+          if (tr.getMeta(codeHighlightKey)) return build(tr.doc);
+          // Colouring is not part of the document, so a change only moves it.
+          return tr.docChanged ? previous.map(tr.mapping, tr.doc) : previous;
+        },
+      },
+      props: {
+        decorations: (state) => codeHighlightKey.getState(state),
+      },
+      view: (view) => {
+        // Nothing has been read yet, so this is what starts the first pass.
+        ensure(view);
+        return {
+          // Only the document can change what there is to colour. A selection
+          // moving fires an update too, and those arrive between every pair of
+          // keystrokes, so they are not worth walking the fences for.
+          update: (updated, previous) => {
+            if (updated.state.doc !== previous.doc) ensure(updated);
+          },
+          destroy: () => {
+            alive = false;
+          },
+        };
+      },
+    });
+  });
+}
+
 /**
  * Build a WYSIWYG editor over `options.parent`.
  *
@@ -951,6 +1077,8 @@ export async function createWysiwygEditor(
     .use(frontMatterSchema)
     .use(frontMatterView)
     .use(gfmWithoutSingleTildeStrikes)
+    // Draws fences; changes nothing about them. See `codeHighlight` above.
+    .use(codeHighlight())
     .use(history)
     .use(
       changeWatcher((text) => {
