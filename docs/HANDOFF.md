@@ -18,21 +18,21 @@
 
 **进度**（ADR §4 里程碑）：
 
-| 里程碑                                  | 状态                                                                 |
-| --------------------------------------- | -------------------------------------------------------------------- |
-| M1 壳与文件 IO                          | ✅                                                                   |
-| M2 WYSIWYG 核心                         | ✅                                                                   |
-| M3 源码模式与多标签                     | ✅                                                                   |
-| M4 工作区与外观                         | ✅                                                                   |
-| M5 扩展渲染                             | ✅ 七片全部合入（见 §3.1）                                           |
-| **v1.0 功能缺口**（用户本轮圈定的范围） | 🟡 **2/6**：拖拽 `d1c1a1d`、本地路径插入 `146452b`；**剩 5 项见 §4** |
-| M6 导出与体验                           | ⬜ 未开始 —— 用户明确要求**排在功能缺口之后**                        |
+| 里程碑                                  | 状态                                                                                              |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| M1 壳与文件 IO                          | ✅                                                                                                |
+| M2 WYSIWYG 核心                         | ✅                                                                                                |
+| M3 源码模式与多标签                     | ✅                                                                                                |
+| M4 工作区与外观                         | ✅                                                                                                |
+| M5 扩展渲染                             | ✅ 七片全部合入（见 §3.1）                                                                        |
+| **v1.0 功能缺口**（用户本轮圈定的范围） | 🟡 **3/6**：拖拽 `d1c1a1d`、本地路径插入 `146452b`、front matter 编辑 `a370e1a`；**剩 4 项见 §4** |
+| M6 导出与体验                           | ⬜ 未开始 —— 用户明确要求**排在功能缺口之后**                                                     |
 
-**验证基线（HEAD = `146452b`，全部实测过）**：
+**验证基线（HEAD = `a370e1a`，全部实测过）**：
 
 | 检查                       | 结果                                                                    |
 | -------------------------- | ----------------------------------------------------------------------- |
-| `pnpm test`                | core **332** / 29 文件，ui **24** / 4 文件 全绿                         |
+| `pnpm test`                | core **335** / 29 文件，ui **24** / 4 文件 全绿                         |
 | `pnpm typecheck`           | core / ui / desktop 三处 `tsc --noEmit` 全 0                            |
 | prettier `--check`         | 全绿                                                                    |
 | `cargo check`（src-tauri） | 0                                                                       |
@@ -44,6 +44,8 @@
 **最近提交**（新到旧）：
 
 ```
+a370e1a Let the reader edit front matter in place (v1.0 gap: front matter 可视化编辑)
+ccda530 Bring HANDOFF.md up to date (M5 done, 2/6 v1.0 gaps)
 146452b Insert an image picked from disk (v1.0 gap: 本地路径插入)
 d1c1a1d Accept a dropped image into ./assets/ (v1.0 gap: 拖拽)
 167dc62 Save a pasted image beside its file (M5 slice 7)
@@ -67,7 +69,7 @@ b88df55 Initial commit: NewMD through M4
    **任何新的 _语法_**（不是新的渲染方式）都要：往 `packages/core/tests/golden/` 补语料 +
    在 `tests/golden.ts` 的 `EXERCISES` 里登记对应 mdast 节点类型
    （节点类型必须落在 `parse()` ∪ `parseTransformed()` 的并集里，否则守卫会红）。
-3. **不得破坏** open / save / autosave / session / recovery 链路与既有测试（当前 332 + 24）。
+3. **不得破坏** open / save / autosave / session / recovery 链路与既有测试（当前 335 + 24）。
 4. **文案双 locale 外置**：`packages/core/src/locales/{zh-CN,en-US}.json`，两套 key 集合必须一致
    （`i18n-coverage.test.ts` 守着），新 key 按字母序插入。React 侧只能通过 `useT()` 拿 `t`。
    - **今天踩到的新规则**：`leaves no raw copy in a ternary or nullish operand` 这一条的正则是
@@ -131,7 +133,35 @@ KaTeX 数学、`^sup^` / `~sub~`、`==highlight==`、脚注、YAML front matter 
 **这一片没有加 golden 语料** —— 两种入口产出的都是已有的 `![](./assets/…)` 图片语法，
 不构成新语法（见 §2 约束 2 的分界）。
 
-### 3.4 三条可复用手法（下一片多半还要用）
+### 3.4 v1.0 第 3 片：front matter 就地编辑（`a370e1a`）
+
+全部落在 `core/src/editor/wysiwyg.ts` + `core/tests/front-matter.test.ts`（新增 3 条，共 6 条）。
+**引擎之外一行没动**，也**没有新文案**（行里显示的是读者自己写的字）。
+
+| 落点                                                 | 内容                                                                                                               |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `frontMatterRows()` / `editableFrontMatterRows()`    | 从原 `toDOM` 内联体里抽出来的两个函数：前者=`toDOM`（复制/导出走它，**不带光标**），后者给每行加 `contenteditable` |
+| `frontMatterView = $view(frontMatterSchema.node, …)` | 节点视图，`.use(frontMatterView)` 注册                                                                             |
+| `update`                                             | 只有当「行拼起来」与节点 `value` 不一致时才重建 DOM（撤销 / 切标签 / `setContent` 会不一致，恰好就是该重建的时刻） |
+| `stopEvent: () => true`                              | 面板内的事件归读者，不归 ProseMirror                                                                               |
+| `onKeyDown`（Enter）                                 | `preventDefault` + 在**行内**插入 `\n` 文本节点 + 手工调 `onInput()`                                               |
+
+**为什么写回仍然是「视图」而不是解析器**：进去的是「各行按 `\n` join」，出来的还是它 ——
+和 `toDOM` 拆的、`parseDOM` 拼的是同一次拆分。全程**不把 YAML 当 YAML 读**，所以注释、
+缩进列表项、`description` 里的冒号都不会被「理解」掉。golden 的 `front-matter.md` 因此继续字节一致，
+**没有新语法 → 没加语料**（§2 约束 2 的分界）。
+
+**Enter 为什么必须自己接**：浏览器的默认行为是把行 `div` **拆成旁边第二个** `div`，
+那个兄弟上**没有 `data-line`**，`shown()` 读不到，下一次保存就**静默丢行**。
+在行内插 `\n`（面板的 `white-space: pre-wrap` 会继承下来）对读者是同一个换行，
+却让 Backspace / Delete 删换行仍然交给浏览器 —— 它们本来就做对了。
+
+**已知未覆盖**：往行里**粘贴多行文本**没接管，Firefox 会把换行变成 `<br>`（`textContent` 读不到）。
+要补就在面板上加 `paste` 监听，`preventDefault` 后自己 `insertNode(createTextNode(text))`。
+jsdom **没有 `ClipboardEvent` / `DataTransfer`**（实测 `typeof` 均为 `undefined`），
+写测试只能用假事件对象，届时自己判断值不值得。
+
+### 3.5 四条可复用手法（下一片多半还要用）
 
 - **双引擎共用一个行为** → 在 `options.parent` 上挂 capture 监听（§3.2）。测试时注意：
   **`dragover` 要派发在 host 上**（ProseMirror 的 `editHandlers.dragover` 无条件 `preventDefault`，
@@ -139,34 +169,42 @@ KaTeX 数学、`^sup^` / `~sub~`、`==highlight==`、脚注、YAML front matter 
 - **外部命令要碰到 EditorPane 私有的 surface** → 走 `useUi` 的 `{ ..., seq }` 请求 + EditorPane 里
   一个订阅 `useEffect`（`reveal`、`imageInsert` 都是这个路子）。
 - **平台能力扩三端 + 7 个 fake**（§2 约束 6）。
+- **给一个节点挂 NodeView** → Milkdown 的 `$view`（`@milkdown/utils`）注册在 `.use(...)` 里，
+  然后 `.use(那个 view)`。三个坑，全部实测过：
+  1. **节点 spec 上写 `view:` 是死代码** —— ProseMirror 只认 editor view 的 `nodeViews` prop
+     （`NodeViewDesc.create` 里读的是 `view.nodeViews[node.type.name]`）。写得再对也不会被调用，
+     而且不报错、不类型报错。
+  2. **必须传 `$nodeSchema(...).node`，不能传 `$nodeSchema(...)` 本身**。后者返回的是
+     `[schemaCtx, $Node]` 数组，`.id` 是**构造时就拷过来的**，而 `$Node` 要等自己的 plugin 跑完
+     才知道 id —— 于是 `$view` 把 node view 登记在 `undefined` 这个 key 下，
+     `nodeViews["yaml"]` 永远查不到。**症状极具迷惑性：不报错，节点照常渲染，只是走的 `toDOM`。**
+  3. 想确认 node view 到底有没有生效，别信 `contenteditable` 之类的探针：**jsdom 的
+     `contentEditable` setter 不写回 attribute**（`el.contentEditable="true"` 之后
+     `getAttribute("contenteditable")` 仍是 `null`，实测）。用 `setAttribute` 写、用
+     `getAttribute` 读，或者在 node view 工厂里临时打一行 log。
+
+  `stopEvent` / `ignoreMutation` / `update` 的取舍见 §3.4 的表格；`update` 返回 `true`
+  并且不动 DOM，是「编辑期间光标不被抢走」的关键。
 
 ---
 
-## 4. 下一步：剩余 5 个功能缺口（**本轮范围**，用户已勾选「功能缺口」这一类）
+## 4. 下一步：剩余 4 个功能缺口（**本轮范围**，用户已勾选「功能缺口」这一类）
 
-> 顺序建议：先问用户定范围的（④）→ 再做有 golden 硬门槛的（③）→ 其余按依赖排。
+> 顺序建议：先问用户定范围的（②）→ 再做有 golden 硬门槛的（③）→ 其余按依赖排。
 > 每一片都走 `/tdd`：先失败测试，再最小实现，再重构。
 
 ### ① Shiki 代码高亮（ADR §2.5、§2.11，行 94 / 117 / 189）
 
-- **现状**：全仓**没有任何 `shiki` 依赖**。WYSIWYG 侧是 `wysiwyg.ts:326` 的 `codeBlockSchema`
+- **现状**：全仓**没有任何 `shiki` 依赖**。WYSIWYG 侧是 `wysiwyg.ts:448` 的 `codeBlockSchema`
   （普通代码块，无高亮）；源码模式是 CodeMirror 自带高亮。ADR 要求「WYSIWYG 与导出 HTML 共用
   同一套高亮」「主题随应用主题联动」。
 - **落点**：`packages/core/src/editor/`（引擎层）+ 依赖装在 `packages/core`。
 - **注意**：只改 DOM 不改序列化 → **不用**加语料；一旦语言元信息参与序列化就必须补语料并登记
   `EXERCISES`。M6 导出 HTML 要复用同一套，别写成只服务编辑器的一次性渲染。
 - **先想清楚**：整块重渲染 vs 逐 token；模式切换（`setMode`）后高亮状态怎么活下来。
+  大概率要一个 `code_block` 的 NodeView —— 手法和坑见 §3.5 最后一条（`$view` + `.node`）。
 
-### ② YAML front matter 可视化**编辑**（ADR 行 96）
-
-- **现状**：`wysiwyg.ts:232` `frontMatterSchema` 是 **`atom: true` 的只读块** —— 显示✅、编辑❌。
-  `toDOM` 按行 split、`parseDOM` 按 `[data-line]` join，**是可逆的**，注释、列表项、续行都能原样回来
-  （`tests/front-matter.test.ts` 钉住了「注释存活」）。
-- **要做成可编辑**：改回 `value` attr 必须**逐行字节级还原**，否则 golden 的 `front-matter.md` 会红。
-- **注意**：`atom` 节点在 ProseMirror 里光标当整体处理；要编辑就得想清楚是改成可编辑节点，
-  还是开一个编辑态（后者更稳，但要新文案 → 双 locale）。
-
-### ③ `[TOC]` 目录（ADR 行 78「常用扩展」）
+### ② `[TOC]` 目录（ADR 行 78「常用扩展」）
 
 - **现状**：全仓搜不到 `[TOC]`，**一条都没有**。
 - **这是新语法 → golden 硬门槛**：补语料 + 登记 `EXERCISES`（§2 约束 2）。
@@ -175,7 +213,7 @@ KaTeX 数学、`^sup^` / `~sub~`、`==highlight==`、脚注、YAML front matter 
   那是另一套往返契约 —— 想清楚再动手。跳转必须走 `MarkdownSurface` 的方法（ADR §2.3），
   UI 不得摸引擎。
 
-### ④ 文件重命名/移动的**引用重写**（ADR 行 146）
+### ③ 文件重命名/移动的**引用重写**（ADR 行 146）
 
 - **现状（本轮核实）**：`PlatformAdapter.renamePath` 三端都在
   （browser 明确 `throw PlatformError("Rename is not supported…")`、tauri 有 `rename_path` 命令），
@@ -186,10 +224,10 @@ KaTeX 数学、`^sup^` / `~sub~`、`==highlight==`、脚注、YAML front matter 
 - 参考：`paste-image.ts` 已经把「相对路径写法」的规矩写死了（`./assets/…`，从不写绝对路径），
   重写时按同一套语义反解。
 
-### ⑤ WYSIWYG 多光标（ADR 行 92、行 158）
+### ④ WYSIWYG 多光标（ADR 行 92、行 158）
 
 - **现状（本轮核实）**：源码模式多光标由 CodeMirror 自带（ADR 行 158 明确选型理由就是它）；
-  WYSIWYG 侧 `wysiwyg.ts` 的 `.use(...)` 列表（815–832 行）**没有任何多光标配置，也没有测试**。
+  WYSIWYG 侧 `wysiwyg.ts` 的 `.use(...)` 列表（937–961 行）**没有任何多光标配置，也没有测试**。
   在 `prosemirror-state@1.4.4` / `prosemirror-view` 的 `dist` 里也搜不到
   `rectangularSelection` / `crosshairCursor` 这类现成导出 —— 可能在别处、要自己写 plugin，
   或者 Milkdown 根本没开。
