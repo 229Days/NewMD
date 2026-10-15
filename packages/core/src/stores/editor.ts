@@ -59,6 +59,15 @@ export interface EditorState {
   /** Close the tab at `index`, leaving the others exactly as they are. */
   closeTab(index: number): void;
   updateContent(content: string): void;
+  /**
+   * Replace a document's text in memory, wherever that document is.
+   *
+   * What was saved is left alone, so the tab goes dirty — which is the point:
+   * a rename's rewrite has to land in the buffer of a document the reader may
+   * have open, without writing over anything they have not saved (ADR-0003
+   * §2.8). For the active document this is `updateContent` addressed by path.
+   */
+  patchContent(path: string, content: string): void;
   /** Persist the active tab, asking for a path only when it has none. */
   save(): Promise<boolean>;
   /** Pick a path and persist. Returns false if the dialog was cancelled. */
@@ -263,6 +272,14 @@ export const useEditor = create<EditorState>()((set, get) => ({
 
   updateContent(content) {
     const doc = activeTab(get);
+    if (!doc) return;
+    const normalized = normalizeNewlines(content);
+    if (doc.content === normalized) return;
+    commit(set, replaceTab(get().tabs, doc, { content: normalized }), get().activeIndex);
+  },
+
+  patchContent(path, content) {
+    const doc = get().tabs.find((tab) => tab.path === path);
     if (!doc) return;
     const normalized = normalizeNewlines(content);
     if (doc.content === normalized) return;
