@@ -1,7 +1,7 @@
 # NewMD 交接文档（HANDOFF）
 
 > 给下一个 Claude Code 会话用：读完本文件即可接着干，不必重读整个仓库。
-> 更新时间：2026-09-30 ｜ HEAD：`146452b`
+> 更新时间：2026-10-15 ｜ HEAD：`5e35a48`
 > ⚠️ 仓库是 **public** 的 —— 任何文档、注释、提交信息里都不要写本机绝对路径、
 > token、密钥、账号。（上一版交接文档里的本机路径已在首次 push 前抹掉，别写回去。）
 
@@ -18,32 +18,35 @@
 
 **进度**（ADR §4 里程碑）：
 
-| 里程碑                                  | 状态                                                                                                                    |
-| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| M1 壳与文件 IO                          | ✅                                                                                                                      |
-| M2 WYSIWYG 核心                         | ✅                                                                                                                      |
-| M3 源码模式与多标签                     | ✅                                                                                                                      |
-| M4 工作区与外观                         | ✅                                                                                                                      |
-| M5 扩展渲染                             | ✅ 七片全部合入（见 §3.1）                                                                                              |
-| **v1.0 功能缺口**（用户本轮圈定的范围） | 🟡 **4/6**：拖拽 `d1c1a1d`、本地路径插入 `146452b`、front matter 编辑 `a370e1a`、Shiki 高亮 `8d7d81c`；**剩 3 项见 §4** |
-| M6 导出与体验                           | ⬜ 未开始 —— 用户明确要求**排在功能缺口之后**                                                                           |
+| 里程碑                                  | 状态                                                                                                                                                        |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M1 壳与文件 IO                          | ✅                                                                                                                                                          |
+| M2 WYSIWYG 核心                         | ✅                                                                                                                                                          |
+| M3 源码模式与多标签                     | ✅                                                                                                                                                          |
+| M4 工作区与外观                         | ✅                                                                                                                                                          |
+| M5 扩展渲染                             | ✅ 七片全部合入（见 §3.1）                                                                                                                                  |
+| **v1.0 功能缺口**（用户本轮圈定的范围） | 🟡 **5/6**：拖拽 `d1c1a1d`、本地路径插入 `146452b`、front matter 编辑 `a370e1a`、Shiki 高亮 `8d7d81c`、`[TOC]` 目录 `190d1cc` + `5e35a48`；**剩 2 项见 §4** |
+| M6 导出与体验                           | ⬜ 未开始 —— 用户明确要求**排在功能缺口之后**                                                                                                               |
 
-**验证基线（HEAD = `8d7d81c`，全部实测过）**：
+**验证基线（HEAD = `5e35a48`，全部实测过）**：
 
 | 检查                       | 结果                                                                         |
 | -------------------------- | ---------------------------------------------------------------------------- |
-| `pnpm test`                | core **341** / 30 文件，ui **24** / 4 文件 全绿                              |
+| `pnpm test`                | core **378** / 32 文件，ui **24** / 4 文件 全绿                              |
 | `pnpm typecheck`           | core / ui / desktop 三处 `tsc --noEmit` 全 0                                 |
 | prettier `--check`         | 全绿                                                                         |
 | `cargo check`（src-tauri） | 0                                                                            |
 | `pnpm build`               | 0（有 chunk 体积警告，见 §5.2；Shiki 让产物从 5.2 MB 涨到 16.2 MB，见 §3.5） |
-| golden                     | `packages/core/tests/golden/` **20 个语料**，其中 6 个带 `.expected.md`      |
+| golden                     | `packages/core/tests/golden/` **21 个语料**，其中 6 个带 `.expected.md`      |
 
 **每改一行都应复现这一基线**，命令见 §7。
 
 **最近提交**（新到旧）：
 
 ```
+5e35a48 Draw [TOC] as a list the reader can jump from (v1.0 gap: [TOC] 目录)
+190d1cc Give [TOC] a node of its own, so a save stops escaping it
+163f908 Bring HANDOFF.md up to date (4/6 v1.0 gaps)
 8d7d81c Colour fenced code with Shiki (v1.0 gap: Shiki 代码高亮)
 a370e1a Let the reader edit front matter in place (v1.0 gap: front matter 可视化编辑)
 ccda530 Bring HANDOFF.md up to date (M5 done, 2/6 v1.0 gaps)
@@ -70,7 +73,7 @@ b88df55 Initial commit: NewMD through M4
    **任何新的 _语法_**（不是新的渲染方式）都要：往 `packages/core/tests/golden/` 补语料 +
    在 `tests/golden.ts` 的 `EXERCISES` 里登记对应 mdast 节点类型
    （节点类型必须落在 `parse()` ∪ `parseTransformed()` 的并集里，否则守卫会红）。
-3. **不得破坏** open / save / autosave / session / recovery 链路与既有测试（当前 341 + 24）。
+3. **不得破坏** open / save / autosave / session / recovery 链路与既有测试（当前 378 + 24）。
 4. **文案双 locale 外置**：`packages/core/src/locales/{zh-CN,en-US}.json`，两套 key 集合必须一致
    （`i18n-coverage.test.ts` 守着），新 key 按字母序插入。React 侧只能通过 `useT()` 拿 `t`。
    - **今天踩到的新规则**：`leaves no raw copy in a ternary or nullish operand` 这一条的正则是
@@ -212,9 +215,72 @@ jsdom **没有 `ClipboardEvent` / `DataTransfer`**（实测 `typeof` 均为 `und
 
 **已知未覆盖**：高亮不参与导出（M6 的一半）；`Decoration.inline` 不做 `mark`（代码块 `marks: ""`），
 所以是画上去的，不进文档；主题切换只有 CSS 一条路径，**没有测试能覆盖**（jsdom 不解析 `var()`），
-测试只能断言 `highlight.css` 里那条规则存在（见 §3.6 最后一条）。
+测试只能断言 `highlight.css` 里那条规则存在（见 §3.7 最后一条）。
 
-### 3.6 五条可复用手法（下一片多半还要用）
+### 3.6 v1.0 第 5 片：`[TOC]` 目录（`190d1cc` + `5e35a48`）
+
+设计全文在 **`docs/adr/0002-toc-directive.md`**（已接受）—— 读它比读这张表快。
+两个提交分工：`190d1cc` 是**节点类型**（字节那一半），`5e35a48` 是**渲染**（块那一半）。
+
+**动手前探到的一条改变了问题形状的事实**：`[TOC]` 今天不是「还没做的功能」，**它就是一个往返 bug**。
+
+```
+roundTrip("[TOC]\n")   === "\\[TOC]\n"
+roundTrip("> [TOC]\n") === "> \\[TOC]\n"
+```
+
+根因在 `mdast-util-to-markdown/lib/unsafe.js` 的
+`{character: '[', inConstruct: 'phrasing', notInConstruct: fullPhrasingSpans}` —— 正文里**每一个**
+`[` 都被转义，`tests/roundtrip.test.ts` 一直没抓到只是因为语料里没有一份触发它的文件。
+由此的硬结论：**写回必须有一个自己的 stringify handler 直接吐出 `[TOC]`**（绕开 `safe()`），
+而 handler 得挂在 mdast 节点类型上 → `[TOC]` **必须是真节点**。这构成 §2 约束 2 说的「新语法」，
+所以补了 `tests/golden/toc.md` 并在 `EXERCISES` 登记 `["toc"]`。
+
+| 落点                                                             | 内容                                                                                                                                                                                                                                                       |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `core/src/editor/toc.ts`                                         | `tocMarkerText` / `tocMarker` / `remarkToc` / `tocHandlers`。节点是 `{type:"toc", value:"原样拼写"}` —— `[toc]` **不许**被规范化成 `[TOC]`。`remarkToc` 在两处都注册在 `inlineLinkReferences` **之后**，让「作者定义过 `[TOC]:` 就它是链接」由顺序自动裁决 |
+| `core/src/editor/toc.ts`（DOM 半边）                             | `TocEntry` / `fillTocList` / `tocEntryTarget`。建元素一次引擎调用都不发，所以留在这个文件（`mermaid.ts` 不在 `wysiwyg.ts` 里是同一个理由）。缩进以 `--newmd-toc-indent` 这个**纯数字**交出去，乘多少是外观                                                 |
+| `core/src/editor/toc.css`                                        | 两态机制本身（两条 `display` 规则），由 **`wysiwyg.ts`** 引入而**不是** `toc.ts` —— 归并门槛 `markdown.ts` 也 import `toc.ts`，而往返一行字节都不该依赖样式表                                                                                              |
+| `wysiwyg.ts` `headingsIn` / `revealHeadingIn`                    | 从原来内联在 `revealHeading` 里的走法抽出来的**共用标题遍历**。目录条目与跳转目标必须同一套 `(level, text, occurrence)` 算术，否则第二个 `## Same` 会跳到第一个去                                                                                          |
+| `wysiwyg.ts` `tocView`                                           | `$view(tocSchema.node, …)`：一次渲两半（`[data-newmd-toc-list]` + `[data-newmd-toc-source]`），`contentDOM` 是 source。**必须显式写 `ignoreMutation`**，见下                                                                                               |
+| `wysiwyg.ts` `tocBlock()`                                        | `$prose` + `appendTransaction`：顶层段落内容恰好是标记 → `setNodeMarkup(pos, tocType)`；`toc` 块内容不再是标记 → 退回段落。转换事务带 `setMeta("addToHistory", false)`，撤销链上只留读者自己敲的那一下                                                     |
+| `wysiwyg.ts` `tocList()`                                         | 插件级 `view.update`（先比签名），标题变了才重画**所有** `[data-newmd-toc-list]`。签名手法同 §3.5                                                                                                                                                          |
+| `wysiwyg.ts` `tocMode()`                                         | `$prose` 的 `props.decorations`：对光标**不在其中**的每个 `toc` 节点打 `data-mode="preview"`                                                                                                                                                               |
+| `packages/ui/src/styles.css`                                     | 目录外观 + `--newmd-toc-indent` 的乘数 + `ul:empty { min-height: 1.25em }`                                                                                                                                                                                 |
+| `tests/toc.test.ts`（12 条）、`tests/toc-block.test.ts`（20 条） | 前者在 mdast 层；后者全部在 DOM 上（jsdom），用真打字 / 真退格 / 真点按驱动                                                                                                                                                                                |
+
+**为什么一打完就转换，而不是等回车**：回车方案下**粘贴**进来的 `[TOC]` 不会成块，保存时会被序列化成
+`\[TOC]` —— 「屏幕上看到什么，文件里就是什么」在那条路径上就破了。`appendTransaction` 不是 Milkdown 的 API，
+是 ProseMirror 标准件（`codeHighlight()` 已用过同形态），不越过 ADR-0001 §2.3。
+
+**`ignoreMutation` 是硬要求（实测，不是猜的）**：NodeView 有 `contentDOM` 时默认 `ignoreMutation` 是 `false`，
+ProseMirror 于是把 contentDOM 之外的**任何**变更当成「整个节点变了」，标脏后重建 —— 症状是文档里
+**任何一处**敲键，块都会被换成一个新元素（块里没变，元素却换了）。`tocView` 的写法是
+`(mutation) => !source.contains(mutation.target)`，`tests/toc-block.test.ts` 用**元素同一性**把它钉住了
+（断言重画后 `[data-newmd-toc-list]` 还是同一个元素）。
+⚠️ 这条曾经**活过**一轮变异测试（改成 `() => false` 时**当时的 12 条全绿**）—— 别因为「改了也不红」就删掉它，
+它只是需要一条问 DOM 同一性的断言才看得见。
+
+**为什么两态是 decoration，不是 NodeView 的状态机**：`props.decorations` 每次状态变化都重算
+（**含纯选区事务**），而 NodeView 的 `update` **只在这个节点自己变时**被调用 —— 光标移进移出不算，
+这个切换它接不住。副产品：两态在 jsdom 里可测（断言 `data-mode` 属性），不必依赖布局。
+
+**缺省是源码态**：`data-mode` 缺失 = 显示那 5 个字符。这是个**安全的默认值** —— decoration 万一丢了，
+读者看到的是文件本身，而不是一份「由可能已经变过的文档画出来」的目录。
+
+**空目录的可用性陷阱**：文档没有标题时列表是空的，而 `display:none` 的块高为 0，
+光标离开后**点不回去**（而「读完条目后光标离开」正是常态）。解法在 `packages/ui/src/styles.css`：
+`[data-newmd-toc-list] ul:empty { min-height: 1.25em }`。
+
+**这一片没有新文案**（块上的字全是读者自己的），所以不涉及双 locale。
+条目是 `<button type="button">` 而**不是** `<a href="#…">` —— Markdown 标题没有 id，
+凭空造一套 id 就是第二个身份系统还得扛往返（ADR-0002 §2.6）；导出 HTML 需要的真锚点留给 M6。
+
+**已知未覆盖**：`display:none` 藏掉的那一半是否真的不干扰读 DOM，**jsdom 测不到**（它不跑层叠也不布局），
+要在真浏览器手测一次；`[TOC]` **在列表项 / 引用块里仍会被转义成 `\[TOC]`**（§2.3 范围之外的原库行为，
+见 ADR-0002 §3）。
+
+### 3.7 可复用手法（下一片多半还要用）
 
 - **双引擎共用一个行为** → 在 `options.parent` 上挂 capture 监听（§3.2）。测试时注意：
   **`dragover` 要派发在 host 上**（ProseMirror 的 `editHandlers.dragover` 无条件 `preventDefault`，
@@ -235,9 +301,17 @@ jsdom **没有 `ClipboardEvent` / `DataTransfer`**（实测 `typeof` 均为 `und
      `contentEditable` setter 不写回 attribute**（`el.contentEditable="true"` 之后
      `getAttribute("contenteditable")` 仍是 `null`，实测）。用 `setAttribute` 写、用
      `getAttribute` 读，或者在 node view 工厂里临时打一行 log。
+  4. **有 `contentDOM` 就必须自己写 `ignoreMutation`**，默认 `false` = 「contentDOM 之外的
+     任何变更都算整个节点变了」，于是文档里别处敲一个键，这个块就被整个重建（§3.6 实测）。
+     症状隐蔽：不报错，只是块的元素每敲一下换一个；**要断言元素同一性才看得见**。
 
   `stopEvent` / `ignoreMutation` / `update` 的取舍见 §3.4 的表格；`update` 返回 `true`
   并且不动 DOM，是「编辑期间光标不被抢走」的关键。
+
+- **「这个节点现在长什么样」取决于光标在哪** → 用插件 `props.decorations` 打一个属性，
+  不要用 NodeView 自己的状态。`props.decorations` **每次状态变化都重算（含纯选区事务）**，
+  而 NodeView 的 `update` **只在这个节点自己变时**才被调用 —— 光标移进移出根本轮不到它。
+  用 decoration 的副产品：状态在 jsdom 里可直接断言（属性在不在），不必依赖布局（§3.6）。
 
 - **异步结果画进 ProseMirror** → 插件 `state` 存 `DecorationSet`，`props.decorations` 读它；
   文档变了先 `previous.map(tr.mapping, tr.doc)`（陈旧但不动光标），结果回来再
@@ -256,23 +330,15 @@ jsdom **没有 `ClipboardEvent` / `DataTransfer`**（实测 `typeof` 均为 `und
 
 ---
 
-## 4. 下一步：剩余 3 个功能缺口（**本轮范围**，用户已勾选「功能缺口」这一类）
+## 4. 下一步：剩余 2 个功能缺口（**本轮范围**，用户已勾选「功能缺口」这一类）
 
-> 顺序建议：先问用户定范围的（②）→ 再做有 golden 硬门槛的（③）→ 其余按依赖排。
+> 顺序建议：先问用户定范围的（①）→ 再做要查清可行性的（②）。
 > 每一片都走 `/tdd`：先失败测试，再最小实现，再重构。
 >
-> ①Shiki 已完成（`8d7d81c`，见 §3.5），下面从 `[TOC]` 起。
+> 已完成 5 片：拖拽（§3.2）、本地路径插入（§3.3）、front matter 编辑（§3.4）、
+> Shiki 高亮（§3.5）、`[TOC]` 目录（§3.6）。下面这两项是剩下的。
 
-### ① `[TOC]` 目录（ADR 行 78「常用扩展」）
-
-- **现状**：全仓搜不到 `[TOC]`，**一条都没有**。
-- **这是新语法 → golden 硬门槛**：补语料 + 登记 `EXERCISES`（§2 约束 2）。
-- **先回答这个设计问题再写代码**：TOC 是渲染成一个可跳转的目录节点，还是渲染时展开成链接列表？
-  **展开会直接打破 md → PM → md 字节一致**。要展开就得在序列化时再折回 `[TOC]`，
-  那是另一套往返契约 —— 想清楚再动手。跳转必须走 `MarkdownSurface` 的方法（ADR §2.3），
-  UI 不得摸引擎。
-
-### ② 文件重命名/移动的**引用重写**（ADR 行 146）
+### ① 文件重命名/移动的**引用重写**（ADR 行 146）
 
 - **现状（本轮核实）**：`PlatformAdapter.renamePath` 三端都在
   （browser 明确 `throw PlatformError("Rename is not supported…")`、tauri 有 `rename_path` 命令），
@@ -283,7 +349,7 @@ jsdom **没有 `ClipboardEvent` / `DataTransfer`**（实测 `typeof` 均为 `und
 - 参考：`paste-image.ts` 已经把「相对路径写法」的规矩写死了（`./assets/…`，从不写绝对路径），
   重写时按同一套语义反解。
 
-### ③ WYSIWYG 多光标（ADR 行 92、行 158）
+### ② WYSIWYG 多光标（ADR 行 92、行 158）
 
 - **现状（本轮核实）**：源码模式多光标由 CodeMirror 自带（ADR 行 158 明确选型理由就是它）；
   WYSIWYG 侧 `wysiwyg.ts` 的 `.use(...)` 列表（1063–1085 行）**没有任何多光标配置，也没有测试**。
@@ -396,5 +462,5 @@ pnpm build                                  # vite 产物体检
    - 状态栏在 WYSIWYG 里报的是**文档文本**的行列，不是源码行列（`changeWatcher` 注释写明了理由）。
 4. **不要动 locale JSON 的结构**（两套 key 必须同构、按字母序），也不要在源码里塞裸文案。
 5. **不要在这三类未选工作里顺手推进**：E2E/Playwright、§5.2 小修、§5.3 文档合规 ——
-   除非用户明确改主意。本轮范围是 §4 的 5 个功能缺口，做完才轮到 M6。
+   除非用户明确改主意。本轮范围是 §4 剩下的 2 个功能缺口（原 6 项里已做完 5 项），做完才轮到 M6。
 6. **不要把本机绝对路径写进任何仓库文件**（public 仓库）。
