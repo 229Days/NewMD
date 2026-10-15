@@ -5,6 +5,7 @@ import {
   handleOpenFolder,
   handleOpenPath,
   handleRefreshWorkspace,
+  handleRename,
   handleRevealHeading,
   handleToggleDir,
 } from "../actions";
@@ -17,6 +18,47 @@ function SectionHeading({ children }: { children: ReactNode }) {
         {children}
       </h2>
     </div>
+  );
+}
+
+/**
+ * The row, turned into a field holding its name (ADR-0003 §2.3).
+ *
+ * Uncontrolled on purpose: the text belongs to the field while the reader is in
+ * it. A value in state would be a second copy of the name, re-rendered on every
+ * keystroke, for a value nobody reads until Enter.
+ */
+function RenameField({
+  initial,
+  indent,
+  onCommit,
+  onCancel,
+}: {
+  initial: string;
+  indent: { paddingLeft: string };
+  onCommit: (name: string) => void;
+  onCancel: () => void;
+}) {
+  const t = useT();
+  return (
+    <input
+      autoFocus
+      defaultValue={initial}
+      aria-label={t("sidebar.renameInput")}
+      style={indent}
+      // The whole name, extension included: a reader who opened this field is
+      // replacing a name, and one that kept the `.md` would make every rename
+      // a two-step edit.
+      onFocus={(event) => event.currentTarget.select()}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") onCommit(event.currentTarget.value);
+        else if (event.key === "Escape") onCancel();
+      }}
+      // Clicking away is giving up, the same as Escape: the alternative is a
+      // field that commits a name the reader never confirmed.
+      onBlur={onCancel}
+      className="my-0.5 w-full rounded-[var(--radius-sm)] border border-[var(--accent)] bg-[var(--bg)] py-0.5 pr-3 text-[13px] text-[var(--fg)] outline-none"
+    />
   );
 }
 
@@ -40,6 +82,22 @@ export function Sidebar() {
   const currentPath = useEditor((s) => s.doc?.path ?? null);
   const content = useEditor((s) => s.doc?.content ?? "");
   const [tab, setTab] = useState<SidebarTab>("files");
+  // Which row the reader last touched, and which one is being renamed. Two
+  // fields rather than one: a row can be selected without being edited, and
+  // choosing a row should not be the same act as opening a field on it.
+  const [selected, setSelected] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState<string | null>(null);
+
+  /**
+   * Hand the new name to the action layer, and stay open if it refused.
+   *
+   * The refusal has already been reported to the reader by then; what is left
+   * for this side to decide is whether the field closes. Closing on a refusal
+   * would take the typo away with it.
+   */
+  async function commitRename(path: string, name: string): Promise<void> {
+    if (await handleRename(path, name)) setRenaming(null);
+  }
 
   // Derived, not stored: what shows is a function of (what each directory
   // holds, which are open), so the panel cannot drift from its own state.
@@ -129,11 +187,36 @@ export function Sidebar() {
             {t("sidebar.emptyFolder")}
           </p>
         ) : (
-          <ul>
+          // Named, because the sidebar shows two lists and a reader arriving by
+          // screen reader has nothing else to tell the tree from the recents.
+          <ul aria-label={rootName ? t("sidebar.filesIn", { name: rootName }) : undefined}>
             {rows.map((row) => {
               // One indent for both kinds: depth is what the tree encodes, and a
               // row that does not move with it reads as a different tree.
               const indent = { paddingLeft: `${12 + row.depth * 12}px` };
+              // The path is worth keeping on hover; the hint is there because
+              // nothing else on screen says a row can be renamed.
+              const hint = `${row.path}\n${t("sidebar.renameHint")}`;
+
+              if (renaming === row.path) {
+                return (
+                  <li key={row.path}>
+                    <RenameField
+                      initial={row.name}
+                      indent={indent}
+                      onCommit={(name) => void commitRename(row.path, name)}
+                      onCancel={() => setRenaming(null)}
+                    />
+                  </li>
+                );
+              }
+
+              // Double-click, because a single click is already spoken for:
+              // it opens a document or folds a folder.
+              const startRename = (): void => {
+                setSelected(row.path);
+                setRenaming(row.path);
+              };
 
               if (row.kind === "dir") {
                 const open = expanded.includes(row.path);
@@ -142,10 +225,19 @@ export function Sidebar() {
                     <button
                       type="button"
                       aria-expanded={open}
-                      title={row.path}
-                      onClick={() => void handleToggleDir(row.path)}
+                      aria-current={selected === row.path ? "true" : undefined}
+                      title={hint}
+                      onClick={() => {
+                        setSelected(row.path);
+                        void handleToggleDir(row.path);
+                      }}
+                      onDoubleClick={startRename}
                       style={indent}
-                      className="flex w-full items-center gap-1.5 py-1 pr-3 text-left text-[13px] text-[var(--fg-muted)] transition-colors hover:bg-[var(--bg-hover)] hover:text-[var(--fg)]"
+                      className={
+                        selected === row.path
+                          ? "flex w-full items-center gap-1.5 py-1 pr-3 text-left text-[13px] text-[var(--fg)] bg-[var(--bg-hover)]"
+                          : "flex w-full items-center gap-1.5 py-1 pr-3 text-left text-[13px] text-[var(--fg-muted)] transition-colors hover:bg-[var(--bg-hover)] hover:text-[var(--fg)]"
+                      }
                     >
                       <span aria-hidden="true" className="w-3 shrink-0 text-[10px]">
                         {open ? "▾" : "▸"}
@@ -161,12 +253,20 @@ export function Sidebar() {
                 <li key={row.path}>
                   <button
                     type="button"
-                    onClick={() => void handleOpenPath(row.path)}
+                    aria-current={selected === row.path ? "true" : undefined}
+                    title={hint}
+                    onClick={() => {
+                      setSelected(row.path);
+                      void handleOpenPath(row.path);
+                    }}
+                    onDoubleClick={startRename}
                     style={indent}
                     className={
                       active
                         ? "flex w-full items-center gap-2 py-1.5 pr-3 text-left text-[13px] text-[var(--accent)]"
-                        : "flex w-full items-center gap-2 py-1.5 pr-3 text-left text-[13px] text-[var(--fg)] transition-colors hover:bg-[var(--bg-hover)]"
+                        : selected === row.path
+                          ? "flex w-full items-center gap-2 py-1.5 pr-3 text-left text-[13px] text-[var(--fg)] bg-[var(--bg-hover)]"
+                          : "flex w-full items-center gap-2 py-1.5 pr-3 text-left text-[13px] text-[var(--fg)] transition-colors hover:bg-[var(--bg-hover)]"
                     }
                   >
                     <span className="truncate">{row.name}</span>

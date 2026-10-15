@@ -15,7 +15,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { resetPlatform, setPlatform } from "../src/platform";
 import type { FileEntry, PlatformAdapter, TextFile, WriteResult } from "../src/platform/types";
-import { rewriteAfterRename } from "../src/rename";
+import { checkRename, rewriteAfterRename } from "../src/rename";
 import { useEditor } from "../src/stores/editor";
 import { useWorkspace } from "../src/stores/workspace";
 import { isDocumentDirty } from "../src/types";
@@ -236,5 +236,86 @@ describe("rewriting the workspace after a rename", () => {
 
     expect(disk.read).toEqual([]);
     expect(report).toEqual({ documents: 0, rewritten: 0, unrewritten: 0 });
+  });
+});
+
+/**
+ * The name the reader typed, before any of the above runs (ADR-0003 §2.3).
+ *
+ * Refusing here rather than letting the disk refuse is not politeness: the
+ * filesystem call is not the same on every platform. On Windows `MoveFileEx`
+ * onto an existing name fails, but on POSIX `rename(2)` **replaces** it — so a
+ * check that only ever ran on one of them would be a promise the other one
+ * breaks, with the overwritten file gone.
+ *
+ * The one rule that is not obvious: a case-insensitive filesystem cannot tell
+ * `a.md` from `A.md`, so the row being renamed is usually the collision the
+ * check would find. It is compared by path, which is exact everywhere.
+ */
+describe("checking a new name for an entry", () => {
+  const row: FileEntry = { path: "/ws/notes/a.md", name: "a.md", kind: "file" };
+  const siblings: FileEntry[] = [
+    row,
+    { path: "/ws/notes/b.md", name: "b.md", kind: "file" },
+    { path: "/ws/notes/assets", name: "assets", kind: "dir" },
+  ];
+
+  it("accepts a free name, and hands back the whole path it would become", () => {
+    expect(checkRename("c.md", row, siblings)).toEqual({ ok: true, to: "/ws/notes/c.md" });
+  });
+
+  it("takes the name as typed, without the spaces around it", () => {
+    // Every rename field the reader has used before behaves this way, and on
+    // Windows a trailing space is not part of the name the filesystem stores.
+    expect(checkRename("  c.md  ", row, siblings)).toEqual({ ok: true, to: "/ws/notes/c.md" });
+  });
+
+  it("refuses a name that is only whitespace", () => {
+    expect(checkRename("   ", row, siblings)).toEqual({ ok: false, reason: "empty" });
+  });
+
+  it("refuses the name it already has", () => {
+    expect(checkRename("a.md", row, siblings)).toEqual({ ok: false, reason: "same" });
+  });
+
+  it("refuses . and ..", () => {
+    // Neither is a name; both are a place. `pathJoin` would happily hand either
+    // to the filesystem, and one of them aims at the folder holding the file.
+    expect(checkRename(".", row, siblings)).toEqual({ ok: false, reason: "reserved" });
+    expect(checkRename("..", row, siblings)).toEqual({ ok: false, reason: "reserved" });
+  });
+
+  it("refuses a separator, because that would be a move", () => {
+    // §2.2 keeps moving to another folder out of this slice. A name carrying a
+    // separator is how a reader would try anyway, and a rename that quietly
+    // turned into a move is not what the field promised.
+    expect(checkRename("sub/c.md", row, siblings)).toEqual({ ok: false, reason: "separator" });
+    expect(checkRename("sub\\c.md", row, siblings)).toEqual({ ok: false, reason: "separator" });
+  });
+
+  it("refuses a name another entry in the same folder already has", () => {
+    expect(checkRename("b.md", row, siblings)).toEqual({ ok: false, reason: "taken" });
+    expect(checkRename("assets", row, siblings)).toEqual({ ok: false, reason: "taken" });
+  });
+
+  it("does not read its own row as a collision when only the case changes", () => {
+    // Windows and macOS would resolve `A.md` to the file being renamed, so a
+    // check that called this taken would make case-only renames impossible.
+    expect(checkRename("A.md", row, siblings)).toEqual({ ok: true, to: "/ws/notes/A.md" });
+  });
+
+  it("still refuses when a different entry is what the case-insensitive match found", () => {
+    // A case-sensitive disk can hold both, and then `a.md` → `A.md` really does
+    // land on a file that is not this one.
+    const both: FileEntry[] = [...siblings, { path: "/ws/FILES/A.md", name: "A.md", kind: "file" }];
+    const upper: FileEntry = { path: "/ws/notes/A.md", name: "A.md", kind: "file" };
+    expect(checkRename("a.md", upper, [upper, ...both])).toEqual({ ok: false, reason: "taken" });
+  });
+
+  it("says nothing about a name taken somewhere else in the workspace", () => {
+    // Only the folder the entry lives in decides: `b.md` in another folder is a
+    // different file, and refusing on it would refuse most renames.
+    const elsewhere: FileEntry[] = [row, { path: "/ws/other/b.md", name: "b.md", kind: "file" }];
+    expect(checkRename("b.md", row, elsewhere)).toEqual({ ok: true, to: "/ws/notes/b.md" });
   });
 });

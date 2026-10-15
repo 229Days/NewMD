@@ -4,10 +4,14 @@
  * duplicated across buttons, hotkeys and menu items.
  */
 import {
+  type FileEntry,
   type HeadingTarget,
+  type RenameRefusal,
+  checkRename,
   flushAutosave,
   getPlatform,
   isDocumentDirty,
+  renameEntry,
   t,
   useEditor,
   useSettings,
@@ -112,6 +116,82 @@ export async function handleRefreshWorkspace(): Promise<void> {
  */
 export async function handleToggleDir(path: string): Promise<void> {
   await report("actions.expandFolder", () => useWorkspace.getState().toggleDir(path));
+}
+
+/** What to say about a refused name. One sentence per way of refusing. */
+function refusalMessage(reason: RenameRefusal, name: string): string {
+  switch (reason) {
+    case "empty":
+      return t("sidebar.renameEmpty");
+    case "reserved":
+      return t("sidebar.renameReserved");
+    case "separator":
+      return t("sidebar.renameSeparator");
+    case "same":
+      return t("sidebar.renameSame");
+    case "taken":
+      return t("sidebar.renameTaken", { name });
+  }
+}
+
+/**
+ * Give a file or folder a new name, and bring everything that pointed at it
+ * along (ADR-0003 §2.3).
+ *
+ * The folder is re-read before the name is judged instead of trusting the tree's
+ * listing. That listing is a cache, and the entry a new name would collide with
+ * may have been created since the last refresh — so deciding on it hands a name
+ * that is taken to the filesystem anyway, which on POSIX replaces the file it
+ * lands on. The re-read is one call, on a keystroke, and it is what makes the
+ * refusal true rather than usually true.
+ *
+ * Returns whether the rename happened, so the field can tell a correction from
+ * an attempt: a refusal leaves it open holding what was typed.
+ */
+export async function handleRename(path: string, name: string): Promise<boolean> {
+  const platform = getPlatform();
+  const parent = platform.pathParent(path);
+  if (parent === null) return false;
+
+  let siblings: FileEntry[];
+  try {
+    siblings = await platform.listDir(parent);
+  } catch (err) {
+    useUi
+      .getState()
+      .notify(
+        "error",
+        t("actions.failed", { label: t("actions.rename"), message: errorMessage(err) }),
+      );
+    return false;
+  }
+
+  // The entry as the folder describes it now, not as the tree remembers it.
+  const entry = siblings.find((candidate) => candidate.path === path);
+  if (entry === undefined) {
+    useUi.getState().notify("error", t("sidebar.renameMissing"));
+    return false;
+  }
+
+  const check = checkRename(name, entry, siblings);
+  if (!check.ok) {
+    useUi.getState().notify("error", refusalMessage(check.reason, name.trim()));
+    return false;
+  }
+
+  const result = await report("actions.rename", () => renameEntry(path, check.to));
+  if (result === undefined) return false;
+
+  const renamed = platform.pathFileName(check.to) ?? check.to;
+  useUi
+    .getState()
+    .notify(
+      "success",
+      result.rewritten > 0
+        ? t("actions.renamedWithLinks", { name: renamed, count: result.rewritten })
+        : t("actions.renamed", { name: renamed }),
+    );
+  return true;
 }
 
 /**

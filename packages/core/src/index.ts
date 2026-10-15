@@ -68,4 +68,11 @@ export {
 } from "./session";
 
 // Renaming, and what it does to the rest of the workspace (ADR-0003).
-export { renameEntry, rewriteAfterRename, type RenameRewriteReport } from "./rename";
+export {
+  checkRename,
+  renameEntry,
+  rewriteAfterRename,
+  type RenameCheck,
+  type RenameRefusal,
+  type RenameRewriteReport,
+} from "./rename";

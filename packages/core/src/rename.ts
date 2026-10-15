@@ -19,10 +19,70 @@
  */
 import { rewriteReferences } from "./editor/reference-rewrite";
 import { getPlatform } from "./platform";
+import { pathJoin, pathParent } from "./platform/path";
 import type { FileEntry } from "./platform/types";
 import { useEditor } from "./stores/editor";
 import { useWorkspace } from "./stores/workspace";
 import { isMarkdownFile, type OpenDocument } from "./types";
+
+/** Why the name the reader typed is not one this entry can take. */
+export type RenameRefusal =
+  /** Nothing, or nothing but whitespace. */
+  | "empty"
+  /** `.` or `..` — a place, not a name. */
+  | "reserved"
+  /** Carries a `/` or `\`, which would make this a move (§2.2). */
+  | "separator"
+  /** The name it already has. */
+  | "same"
+  /** Another entry in the same folder is already called that. */
+  | "taken";
+
+export type RenameCheck = { ok: true; to: string } | { ok: false; reason: RenameRefusal };
+
+/**
+ * Whether `name` is a name `entry` can take, and the absolute path it becomes.
+ *
+ * Called before the rename, and not only so the reader gets a sentence instead
+ * of a filesystem error: `rename(2)` on POSIX *replaces* the destination, so on
+ * those platforms the disk will not refuse an overwrite on our behalf.
+ *
+ * `siblings` are the entries to look for a collision among, and which of them
+ * count is decided here rather than by the caller: only ones in the entry's own
+ * folder. A rename compares names, so a list that reached into other folders
+ * would refuse names that are free — which is the kind of mistake that looks
+ * like the feature being broken rather than like a caller's bug.
+ *
+ * What it does have to be is *everything* in that folder, not the rows the tree
+ * happens to show: a name is taken by a file whether or not the sidebar renders
+ * it.
+ */
+export function checkRename(
+  name: string,
+  entry: FileEntry,
+  siblings: readonly FileEntry[],
+): RenameCheck {
+  const trimmed = name.trim();
+  if (trimmed === "") return { ok: false, reason: "empty" };
+  if (trimmed === "." || trimmed === "..") return { ok: false, reason: "reserved" };
+  if (/[\\/]/.test(trimmed)) return { ok: false, reason: "separator" };
+  if (trimmed === entry.name) return { ok: false, reason: "same" };
+
+  const parent = pathParent(entry.path);
+  // Compared without case, and against the path rather than the name: on a
+  // case-insensitive filesystem the row being renamed is ordinarily the very
+  // entry a case-blind match finds, and it is not a collision with itself.
+  const wanted = trimmed.toLowerCase();
+  const taken = siblings.some(
+    (other) =>
+      other.path !== entry.path &&
+      pathParent(other.path) === parent &&
+      other.name.toLowerCase() === wanted,
+  );
+  if (taken) return { ok: false, reason: "taken" };
+
+  return { ok: true, to: parent === null ? trimmed : pathJoin(parent, trimmed) };
+}
 
 export interface RenameRewriteReport {
   /** Documents whose text changed. */
