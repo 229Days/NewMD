@@ -14,25 +14,28 @@
 
 **形态**：Tauri 2 桌面壳 + 纯 Web 核心（React 19 + TS strict + Vite + Zustand + Tailwind 4）。
 **架构权威文档**：[docs/adr/0001-typora-like-markdown-editor.md](docs/adr/0001-typora-like-markdown-editor.md)
-（ADR-0001，已接受；进度、验收、未决问题都以它为准）。
+（ADR-0001，已接受；进度、验收、未决问题都以它为准）。另有三份局部 ADR：
+[0002 `[TOC]`](docs/adr/0002-toc-directive.md)、
+[0003 重命名引用重写](docs/adr/0003-rename-reference-rewrite.md)、
+[0004 多光标范围](docs/adr/0004-multi-cursor-scope.md)。
 
 **进度**（ADR §4 里程碑）：
 
-| 里程碑                                  | 状态                                                                                                                                                                                                                                                                              |
-| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| M1 壳与文件 IO                          | ✅                                                                                                                                                                                                                                                                                |
-| M2 WYSIWYG 核心                         | ✅                                                                                                                                                                                                                                                                                |
-| M3 源码模式与多标签                     | ✅                                                                                                                                                                                                                                                                                |
-| M4 工作区与外观                         | ✅                                                                                                                                                                                                                                                                                |
-| M5 扩展渲染                             | ✅ 七片全部合入（见 §3.1）                                                                                                                                                                                                                                                        |
-| **v1.0 功能缺口**（用户本轮圈定的范围） | 🟡 **6/6 中 5 项完成**：拖拽 `d1c1a1d`、本地路径插入 `146452b`、front matter 编辑 `a370e1a`、Shiki 高亮 `8d7d81c`、`[TOC]` 目录 `190d1cc` + `5e35a48`、**重命名引用重写** `bb51e9b` `52198e5` `4ff3af9` `12738ae` `b7d3bbe` `ed5f6b9`（ADR-0003）；**只剩 WYSIWYG 多光标，见 §4** |
-| M6 导出与体验                           | ⬜ 未开始 —— 用户明确要求**排在功能缺口之后**                                                                                                                                                                                                                                     |
+| 里程碑                                  | 状态                                                                                                                                                                                                                                                                                                                    |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M1 壳与文件 IO                          | ✅                                                                                                                                                                                                                                                                                                                      |
+| M2 WYSIWYG 核心                         | ✅                                                                                                                                                                                                                                                                                                                      |
+| M3 源码模式与多标签                     | ✅                                                                                                                                                                                                                                                                                                                      |
+| M4 工作区与外观                         | ✅                                                                                                                                                                                                                                                                                                                      |
+| M5 扩展渲染                             | ✅ 七片全部合入（见 §3.1）                                                                                                                                                                                                                                                                                              |
+| **v1.0 功能缺口**（用户本轮圈定的范围） | ✅ **7 项全部收口**：拖拽 `d1c1a1d`、本地路径插入 `146452b`、front matter 编辑 `a370e1a`、Shiki 高亮 `8d7d81c`、`[TOC]` 目录 `190d1cc` + `5e35a48`、重命名引用重写 `bb51e9b` `52198e5` `4ff3af9` `12738ae` `b7d3bbe` `ed5f6b9`（ADR-0003）、**多光标** `3694e03`（ADR-0004 —— 源码模式做，WYSIWYG **明确不做**）。见 §4 |
+| M6 导出与体验                           | ⬜ 未开始 —— 用户明确要求**排在功能缺口之后**                                                                                                                                                                                                                                                                           |
 
-**验证基线（HEAD = `ed5f6b9`，全部实测过）**：
+**验证基线（HEAD = `3694e03` —— 最后一次改代码的提交，它之后只有文档改动，数字不变）**：
 
 | 检查                       | 结果                                                                         |
 | -------------------------- | ---------------------------------------------------------------------------- |
-| `pnpm test`                | core **446** / 35 文件，ui **39** / 5 文件 全绿                              |
+| `pnpm test`                | core **450** / 36 文件，ui **39** / 5 文件 全绿                              |
 | `pnpm typecheck`           | core / ui / desktop 三处 `tsc --noEmit` 全 0                                 |
 | prettier `--check`         | 全绿                                                                         |
 | `cargo check`（src-tauri） | 0                                                                            |
@@ -44,6 +47,8 @@
 **最近提交**（新到旧）：
 
 ```
+3694e03 Give source mode more than one caret, and Alt the one key that grows it
+9cf78ad Bring HANDOFF.md up to date (6/6 v1.0 gaps, one left)
 ed5f6b9 Let a row in the tree be renamed, and refuse the names that cannot be
 b7d3bbe Move the tabs, the tree and the disk in the one order that holds
 12738ae Land a rename's rewrite where each document actually lives
@@ -75,11 +80,15 @@ b88df55 Initial commit: NewMD through M4
 
 1. **Milkdown / CodeMirror / ProseMirror 调用全部收敛在 `packages/core/src/editor/`**（ADR §2.3）。
    UI 只能看 `MarkdownSurface` / `MarkdownEditorHandle`，不得 import 引擎包。换引擎只改这一层。
+   - **边界画在 `src/`，不在 `tests/`**：`packages/core/tests/multi-cursor.test.ts` 直接 import 了
+     `@codemirror/state` / `@codemirror/view`（全仓测试里就这么一处，§3.8 讲了为什么非这样不可）。
+     这不违反本条 —— 但它也不该变成习惯：能走 handle 观察的就走 handle。
 2. **golden 语料是合并硬门槛**（ADR §2.10）：`md → ProseMirror doc → md` 必须字节级一致。
    **任何新的 _语法_**（不是新的渲染方式）都要：往 `packages/core/tests/golden/` 补语料 +
    在 `tests/golden.ts` 的 `EXERCISES` 里登记对应 mdast 节点类型
    （节点类型必须落在 `parse()` ∪ `parseTransformed()` 的并集里，否则守卫会红）。
-3. **不得破坏** open / save / autosave / session / recovery 链路与既有测试（当前 378 + 24）。
+3. **不得破坏** open / save / autosave / session / recovery 链路与既有测试
+   （当前数量见 §1「验证基线」，别在这里再抄一份会过期的数字）。
 4. **文案双 locale 外置**：`packages/core/src/locales/{zh-CN,en-US}.json`，两套 key 集合必须一致
    （`i18n-coverage.test.ts` 守着），新 key 按字母序插入。React 侧只能通过 `useT()` 拿 `t`。
    - **今天踩到的新规则**：`leaves no raw copy in a ternary or nullish operand` 这一条的正则是
@@ -221,7 +230,7 @@ jsdom **没有 `ClipboardEvent` / `DataTransfer`**（实测 `typeof` 均为 `und
 
 **已知未覆盖**：高亮不参与导出（M6 的一半）；`Decoration.inline` 不做 `mark`（代码块 `marks: ""`），
 所以是画上去的，不进文档；主题切换只有 CSS 一条路径，**没有测试能覆盖**（jsdom 不解析 `var()`），
-测试只能断言 `highlight.css` 里那条规则存在（见 §3.8 最后一条）。
+测试只能断言 `highlight.css` 里那条规则存在（见 §3.9 最后一条）。
 
 ### 3.6 v1.0 第 5 片：`[TOC]` 目录（`190d1cc` + `5e35a48`）
 
@@ -326,7 +335,42 @@ ProseMirror 于是把 contentDOM 之外的**任何**变更当成「整个节点�
 
 **没有新语法 → 没有 golden 语料**（§2 约束 2 的分界）：这一片不碰序列化器，往返语料不动。
 
-### 3.8 可复用手法（下一片多半还要用）
+### 3.8 v1.0 第 7 片：多光标（ADR-0004）
+
+设计全在 `docs/adr/0004-multi-cursor-scope.md`，这里只记**落地与踩到的**。
+
+**这一片的形状和之前六片都不一样：它大半是在修一个「以为已经有的东西」。** HANDOFF §4 原先写着
+「源码模式多光标由 CodeMirror 自带」，而它其实要显式打开一个 facet —— 于是三个手势全都接好了、
+又全都不能用，而整整一个项目周期没人测过它们（因为「自带」的东西不需要测）。
+
+**红测试在哪、为什么只有四条。** `packages/core/tests/multi-cursor.test.ts`。四个手势里两个是鼠标
+手势，jsdom 没有布局也没有 `caretPositionFromPoint`，驱动不了坐标。所以驱动的是**它们留下的东西**
+（一个带多个范围的 transaction）与**应用给的答案**（`clickAddsSelectionRange` 那一个函数读回来调）：
+
+| 手势           | 怎么测                                                                      |
+| -------------- | --------------------------------------------------------------------------- |
+| Alt 拖拽       | 直接派发它落下时那个「一行一个 range」的 transaction                        |
+| Alt 点击       | 读回 facet，问 `{altKey:true}` / `{altKey:false}` / `{ctrlKey:true}`        |
+| `Mod-d`        | 在 `contentDOM` 上**真派发 keydown**，走 `codemirror.ts` 注册的键位         |
+| 打字落在每一处 | `handle.insertImage(...)` —— 它是 handle 上唯一走 `replaceSelection` 的调用 |
+
+**jsdom 测不到的三件事（手测清单）**：Alt+点击、Alt 拖拽、以及 `crosshairCursor()` 那个十字提示。
+最后一条尤其值得记：**删掉 `crosshairCursor()`，450 条测试一条都不会红** —— 纯视觉的东西在 jsdom 里
+就是不可见的，别指望测试兜住它。
+
+**测试里第一次出现引擎符号**（`EditorSelection` / `EditorView`），之前 core 的测试一条都没有直接
+import 过 `@codemirror/*`。理由是 `MarkdownEditorHandle` 故意比两个引擎都窄（ADR-0001 §2.3），
+要读回选区，剩下的路只有 `EditorView.findFromDOM(host)`。**给 handle 加一个方法好让测试能看进去**
+是另一条路，代价是把同一个口子开给所有调用方。约束管的是 `src/editor/`，测试文件不在其中。
+
+**没有新文案。** 这两个手势**故意不进**快捷键设置面板：`HotkeyActionId` 是应用级动作的表，写进去
+就等于要求 WYSIWYG 也认这个绑定，而 WYSIWYG 没有这个能力 —— 半个矩阵会撒谎的设置项比没有更糟。
+所以双 locale 约束（§2 约束 4）在这一片不适用。
+
+**顺带活过来的两个命令**：`defaultKeymap` 里的 `Mod-Alt-↑` / `Mod-Alt-↓`（`addCursorAbove/Below`）
+在同一个 facet 之下，之前按下去同样没反应。
+
+### 3.9 可复用手法（下一片多半还要用）
 
 - **双引擎共用一个行为** → 在 `options.parent` 上挂 capture 监听（§3.2）。测试时注意：
   **`dragover` 要派发在 host 上**（ProseMirror 的 `editHandlers.dragover` 无条件 `preventDefault`，
@@ -376,25 +420,36 @@ ProseMirror 于是把 contentDOM 之外的**任何**变更当成「整个节点�
 
 ---
 
-## 4. 下一步：剩余的 v1.0 功能缺口（**本轮范围**）
+## 4. v1.0 功能缺口：7 项全部收口（**本轮范围已走完**）
 
 > 每一片都走 `/tdd`：先失败测试，再最小实现，再重构。
->
-> 已完成 6 项：拖拽（§3.2）、本地路径插入（§3.3）、front matter 编辑（§3.4）、
-> Shiki 高亮（§3.5）、`[TOC]` 目录（§3.6）、**重命名引用重写（§3.7）**。
-> 下面这一项是最后剩下的。
 
-### ① ✅ 文件重命名/移动的**引用重写**（ADR 行 146）—— 已完成，见 §3.7
+前六片：拖拽（§3.2）、本地路径插入（§3.3）、front matter 编辑（§3.4）、Shiki 高亮（§3.5）、
+`[TOC]` 目录（§3.6）、重命名引用重写（§3.7）。
 
-### ② WYSIWYG 多光标（ADR 行 92、行 158）
+**第七项（多光标）是收窄，不是实现**：源码模式做了，WYSIWYG 明确不做 —— 决定与理由全在
+`docs/adr/0004-multi-cursor-scope.md`，落地记录见 §3.8。所以这一栏从「6/6 中 5 项」变成
+**「7 项 6 实现 + 1 收窄」**，而**下一件该做的事是 M6**（§6），不是补 WYSIWYG 多光标。
 
-- **现状（本轮核实）**：源码模式多光标由 CodeMirror 自带（ADR 行 158 明确选型理由就是它）；
-  WYSIWYG 侧 `wysiwyg.ts` 的 `.use(...)` 列表（1063–1085 行）**没有任何多光标配置，也没有测试**。
+原先留在这里的 ② 里有一条**已经证明是错的**，留着当教训：
+
+- ~~「源码模式多光标由 CodeMirror 自带（ADR 行 158 明确选型理由就是它）」~~ —— **错**。
+  CodeMirror 要显式打开 `EditorState.allowMultipleSelections`，没有任何 `@codemirror/*` 包替调用方
+  打开，本仓也从没打开过。ADR-0001 行 158 说的是**选型理由**（它确实比自研强），不是「装了就生效」。
+- 另一条只是**行号错了**：`wysiwyg.ts` 的 `.use(...)` 列表在 **1439–1471 行**，不是 1063–1085
+  （那个文件一共 1548 行）。WYSIWYG 侧确实没有任何多光标配置，这部分结论仍然成立。
+
+<details>
+<summary>② 原文留档（已结案，别再照着做）</summary>
+
+- 现状（当时核实）：WYSIWYG 侧 `wysiwyg.ts` 的 `.use(...)` 列表**没有任何多光标配置，也没有测试**。
   在 `prosemirror-state@1.4.4` / `prosemirror-view` 的 `dist` 里也搜不到
   `rectangularSelection` / `crosshairCursor` 这类现成导出 —— 可能在别处、要自己写 plugin，
   或者 Milkdown 根本没开。
 - **第一步**：查清「ProseMirror 这边能不能开、Milkdown 挡没挡」，**然后再写失败测试**；
   不要在没有红测试的情况下直接改 `.use(...)` 列表。
+
+</details>
 
 ---
 
@@ -447,7 +502,8 @@ ProseMirror 于是把 contentDOM 之外的**任何**变更当成「整个节点�
 ```bash
 pnpm test                                   # 全仓测试（core + ui）
 pnpm typecheck                              # 三处 tsc --noEmit
-node node_modules/prettier/bin/prettier.cjs --check "packages/**/*.{ts,tsx,md,css}"
+# prettier：packages 与 docs 两处都要查（docs 里的表格 prettier 会重排）
+node node_modules/prettier/bin/prettier.cjs --check "packages/**/*.{ts,tsx,md,css}" "docs/**/*.md"
 
 # 单跑一个包 / 一个文件（包内 vitest，别用 npx）
 # ⚠️ 必须**先 cd 进包**，不能从仓库根加 --root：highlight.test.ts 与 toc-block.test.ts
@@ -487,6 +543,10 @@ pnpm build                                  # vite 产物体检
 - **ProseMirror `someProp` 不合并 `handleDOMEvents`** —— 只带 `paste` / `drop` 的 plugin 永远轮不到，
   因为 Milkdown 的 preset-commonmark 已经占了这个槽。这就是为什么图片入口放在 host 的 capture 监听上。
 - **golden 的 `singleTilde: false`**（GFM 关掉单波浪线）—— 别「顺手」打开，往返会红。
+- **CodeMirror 的多选区是 opt-in，而且是静默的**：`EditorState.allowMultipleSelections` 没开时
+  `applyTransaction` 会把 `tr.newSelection` 收敛成一个范围 —— **在造出这个范围的同一个 transaction
+  里**。所以症状不是报错，是「手势没反应/只生效一半」（§3.8、ADR-0004 §1）。同类要先查的还有
+  `tabSize` / `indentUnit` 这类 state facet：`Facet.define()` 出来的东西一律要有人 `.of()`。
 
 ---
 
