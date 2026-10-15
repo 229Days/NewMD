@@ -67,6 +67,7 @@ const EXERCISES: Record<string, string[]> = {
   "subscript.md": ["sub", "sup"],
   "no-trailing-newline.md": ["paragraph"],
   "table.md": ["table", "tableRow", "tableCell"],
+  "toc.md": ["toc"],
   "trailing-blank-lines.md": ["paragraph"],
 };
 

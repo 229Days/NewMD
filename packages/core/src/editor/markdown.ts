@@ -15,6 +15,7 @@ import remarkParse from "remark-parse";
 import remarkStringify, { type Options } from "remark-stringify";
 import { unified, type Plugin } from "unified";
 import { inlineMarkHandlers, remarkInlineMarks } from "./inline-marks";
+import { remarkToc, tocHandlers } from "./toc";
 
 /**
  * Serialization policy. These are decisions about how a user's Markdown looks
@@ -34,7 +35,7 @@ export const stringifyOptions: Options = {
   // written back out. Part of the same options object as the rest of the
   // policy, because the engine is handed this object wholesale and a second
   // copy would let a save spell `==` differently depending on the mode.
-  handlers: inlineMarkHandlers,
+  handlers: { ...inlineMarkHandlers, ...tocHandlers },
 };
 
 /**
@@ -127,6 +128,10 @@ const processor = unified()
   // engine has no schema for and would drop.
   .use(remarkFrontmatter)
   .use(inlineLinkReferences)
+  // `[TOC]` after link resolution, not before: `[TOC]: url` makes every `[TOC]`
+  // a link, and an author who defined that label means their link. Ordering is
+  // what answers that, so this must stay below the line above.
+  .use(remarkToc)
   .use(remarkInlineMarks)
   .use(remarkStringify, stringifyOptions);
 

@@ -78,6 +78,7 @@ import { inlineMarkHandlers, remarkInlineMarks } from "./inline-marks";
 import { drawMermaid } from "./mermaid";
 import { renderMath } from "./math";
 import { inlineLinkReferences, stringifyOptions } from "./markdown";
+import { remarkToc } from "./toc";
 
 /**
  * Milkdown's commonmark preset minus the step that eats link definitions.
@@ -575,6 +576,58 @@ const mermaidSchema = $nodeSchema("mermaid", () => ({
 }));
 
 /**
+ * The `[TOC]` directive (ADR-0002).
+ *
+ * `editor/toc.ts` recognises it, and mdast has no node type for it, so without a
+ * schema here the parse would build a `toc` this document has no room for — and
+ * the preset would drop it silently, taking the marker out of the file on the
+ * next save. That is the whole reason this node is not simply a paragraph.
+ *
+ * The content *is* the marker, kept as real editable text rather than as an
+ * attribute: the reader types `[TOC]`, sees a table of contents, and gets the
+ * five characters back the moment the caret goes in (ADR-0002 §2.5). An
+ * attribute would have to be written into the DOM by hand and read back out of
+ * it, which is a second copy of the spelling to keep in step with the first.
+ *
+ * `marks: ""` for the same reason the code block has it: `[toc]` in bold is not
+ * a different directive, and a mark landing inside the marker would make the
+ * text stop matching what `tocMarker` looks for.
+ */
+const tocSchema = $nodeSchema("toc", () => ({
+  content: "text*",
+  group: "block",
+  marks: "",
+  defining: true,
+  toDOM: () => ["div", { "data-newmd-toc": "" }, 0],
+  // No `getAttrs`: the tag says which node this is and the element's text is
+  // the marker, so there is nothing to read off it.
+  parseDOM: [{ tag: "div[data-newmd-toc]" }],
+  parseMarkdown: {
+    match: (node) => node.type === "toc",
+    runner: (state, node, type) => {
+      // Milkdown hands the mdast node over as an indexed record, so the field
+      // arrives as `unknown` and has to be read back as what it carries.
+      const value = typeof node.value === "string" ? node.value : "";
+      state.openNode(type);
+      // An empty text node is not a thing ProseMirror will build a document
+      // from, and `content: "text*"` is happy with none at all.
+      if (value) state.addText(value);
+      state.closeNode();
+    },
+  },
+  toMarkdown: {
+    match: (node) => node.type.name === "toc",
+    runner: (state, node) => {
+      // Back as the node it arrived as, so `editor/toc.ts`'s handler is the one
+      // spelling `[TOC]` — a second spelling here would be a second thing to
+      // keep in step with it. `textContent` is what the reader can see, which
+      // is what the file has to say.
+      state.addNode("toc", undefined, undefined, { value: node.textContent });
+    },
+  },
+}));
+
+/**
  * `==highlight==` (ADR-0001 §2.4 常用扩展).
  *
  * mdast has no node type for this — the delimiter is recognised by
@@ -1053,6 +1106,10 @@ export async function createWysiwygEditor(
         // Reference resolution first: it rewrites `imageReference` into `image`,
         // and the strings below then normalise whatever it produced.
         { plugin: inlineLinkReferences, options: {} },
+        // Right after link resolution, the position it holds in the merge gate
+        // too: `[TOC]: url` makes every `[TOC]` a link, and the ordering is
+        // what decides that rather than a branch of its own.
+        { plugin: remarkToc, options: {} },
         { plugin: fillAbsentStrings, options: {} },
         // Last, and in the same position the merge gate runs it, so both
         // pipelines see the same tree. Ordering matters only against the two
@@ -1066,6 +1123,7 @@ export async function createWysiwygEditor(
     .use(codeBlockSchema)
     // Takes the fences that one deliberately leaves alone.
     .use(mermaidSchema)
+    .use(tocSchema)
     // See the file header: this one is exported but not in the preset.
     .use(insertImageInputRule)
     .use(definitionSchema)
