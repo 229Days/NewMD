@@ -1,0 +1,23 @@
+/*
+ * Which half of a `[TOC]` block is on screen (ADR-0002 §2.5).
+ *
+ * The block holds both at once — the table of contents drawn from the document,
+ * and the five characters the caret edits — and `data-mode="preview"` is which
+ * of them the reader is being shown. These two rules are that whole mechanism,
+ * which is why they ship inside core rather than with the block's looks: the
+ * attribute is inert on its own, and a stylesheet that never arrived would put
+ * both halves on screen at once.
+ *
+ * The source half is the state with *no* decoration, and the second rule says
+ * so. That direction matters: the five characters are what the node really
+ * holds and what a save writes, so a decoration lost to a bug leaves the reader
+ * looking at the file rather than at a list drawn from a document that may have
+ * moved on since.
+ */
+[data-newmd-toc][data-mode="preview"] [data-newmd-toc-source] {
+  display: none;
+}
+
+[data-newmd-toc]:not([data-mode="preview"]) [data-newmd-toc-list] {
+  display: none;
+}

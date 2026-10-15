@@ -21,6 +21,7 @@
 import type { Nodes, Root } from "mdast";
 import type { Options as StringifyOptions } from "remark-stringify";
 import type { Plugin } from "unified";
+import type { HeadingTarget } from "./handle";
 
 /**
  * The spellings that are the directive, in full and on their own.
@@ -30,6 +31,18 @@ import type { Plugin } from "unified";
  * the author typed rather than become a block that silently drops the rest.
  */
 const DIRECTIVE = /^\[toc\]$/i;
+
+/**
+ * The marker `text` is, or `null` when it is not the directive.
+ *
+ * Split out from `tocMarker` because the engine needs the same question asked
+ * of a string: `wysiwyg.ts` holds the marker as ProseMirror text rather than as
+ * mdast, and a second spelling of what counts would let the two disagree about
+ * a document that is on screen.
+ */
+export function tocMarkerText(text: string): string | null {
+  return DIRECTIVE.test(text) ? text : null;
+}
 
 /**
  * The marker this paragraph was written with, or `null` when it is not one.
@@ -48,7 +61,7 @@ export function tocMarker(node: Nodes): string | null {
   if (node.children.length !== 1) return null;
   const only = node.children[0];
   if (only === undefined || only.type !== "text") return null;
-  return DIRECTIVE.test(only.value) ? only.value : null;
+  return tocMarkerText(only.value);
 }
 
 /**
@@ -101,3 +114,91 @@ const tocHandler: Handler = (node, _parent, state, info) => {
  * `ConstructNameMap` would mean declaring a module this file never imports.
  */
 export const tocHandlers: Handlers = Object.fromEntries([["toc", tocHandler]]) as Handlers;
+
+/**
+ * One line of the table of contents: a heading, named the way both engines name
+ * one (`HeadingTarget` in `editor/handle.ts`).
+ *
+ * Not a position. The entries are computed from the document, drawn beside it
+ * and thrown away again; a position in one of them would be a coordinate in a
+ * document that may have moved on by the time it is used.
+ */
+export interface TocEntry {
+  /** 1–6, as Markdown depth. */
+  level: number;
+  /** Heading text with markers, emphasis and links flattened away. */
+  text: string;
+  /** Which of the headings at this level with this text, counting from 0. */
+  occurrence: number;
+}
+
+/**
+ * Draw `entries` into `list`, replacing whatever was there.
+ *
+ * Here rather than in `wysiwyg.ts` for the reason `mermaid.ts` is out of it:
+ * that file's contract is that every engine call in the project lives in it,
+ * and building these elements makes none.
+ *
+ * **The depth is emitted, the indentation is not.** How far an entry sits from
+ * the margin is a stylesheet's business (§2.8), but only the document knows how
+ * deep it goes, so the number travels as a custom property and the multiplier
+ * stays in `packages/ui`. `data-level` is the heading's own depth and cannot
+ * serve — an entry printed at `data-level` would sit two steps in on a document
+ * whose shallowest heading is an `h3`.
+ *
+ * A `<button type="button">` rather than an `<a>`: there is no heading id to
+ * point at and inventing one would be a second identity system beside
+ * `(level, text, occurrence)` — see ADR-0002 §2.6 for what that costs at export.
+ * `type="button"` because these are inside a form-less contenteditable today and
+ * a form tomorrow, where the default `submit` would reload the page.
+ */
+export function fillTocList(list: HTMLElement, entries: TocEntry[]): void {
+  const owner = list.ownerDocument;
+  // The shallowest heading in the document, so a document that starts at `##`
+  // is not printed as if something above it were missing. `Infinity` for an
+  // empty list, which builds no entries and never reads it.
+  const shallowest = entries.reduce((min, entry) => Math.min(min, entry.level), Infinity);
+
+  const items = entries.map((entry) => {
+    const item = owner.createElement("li");
+    const button = owner.createElement("button");
+    button.type = "button";
+    button.setAttribute("data-newmd-toc-entry", "");
+    button.setAttribute("data-level", String(entry.level));
+    button.setAttribute("data-text", entry.text);
+    button.setAttribute("data-occurrence", String(entry.occurrence));
+    button.style.setProperty("--newmd-toc-indent", String(entry.level - shallowest));
+    button.textContent = entry.text;
+    item.append(button);
+    return item;
+  });
+
+  const outline = owner.createElement("ul");
+  outline.append(...items);
+  list.replaceChildren(outline);
+}
+
+/**
+ * The heading an entry points at, or `null` when this element is not one.
+ *
+ * Read back off the element rather than closed over when the entry was drawn:
+ * `fillTocList` replaces every entry whenever the headings move, so a handler
+ * holding the button it was built for would be holding one that is no longer on
+ * screen. The three attributes are the anchor `editor/handle.ts` defines, and
+ * reading them here is what keeps the block from needing a second idea of what
+ * an entry is.
+ *
+ * Each field is checked for presence before it is read: `getAttribute` answers
+ * `null` for an absent one and `Number(null)` is `0`, so a level that was simply
+ * missing would arrive as a perfectly plausible `h1`.
+ */
+export function tocEntryTarget(element: Element): HeadingTarget | null {
+  const level = element.getAttribute("data-level");
+  const text = element.getAttribute("data-text");
+  const occurrence = element.getAttribute("data-occurrence");
+  if (level === null || text === null || occurrence === null) return null;
+  const depth = Number(level);
+  const index = Number(occurrence);
+  if (!Number.isInteger(depth) || !Number.isInteger(index)) return null;
+  return { level: depth, text, occurrence: index };
+}

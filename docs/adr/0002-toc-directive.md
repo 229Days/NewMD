@@ -104,12 +104,14 @@ WYSIWYG 里 `[TOC]` 一旦成为独立段就立刻变成 `toc` 节点 —— 不
 
 用 decoration + CSS 而不是 NodeView 自己的状态机，是因为 `props.decorations` 每次状态变化都会重算（含纯选区事务），而 NodeView 的 `update` 只在**这个节点自己**变时被调用 —— 光标移进移出不算，这个模式切换它接不住。这也让两态在 jsdom 里可测（断言 `data-mode` 属性），不必依赖布局。
 
+NodeView 还必须**显式声明 `ignoreMutation`**（只放行 contentDOM 内的变更）。不声明时 ProseMirror 把 contentDOM 之外的变更当成「整个节点变了」，标脏后重建 —— 实测：文档里任何一处敲键，块都会被换成新元素。这条是实现的硬要求，`tests/toc-block.test.ts` 用元素同一性钉住了。
+
 ### 2.6 目录内容与跳转
 
 - 条目由**与 `revealHeading` 同一份**标题遍历产出。现状 `wysiwyg.ts` 的 `revealHeading` 里内联着 `(level, textContent, occurrence)` 的走法；本片把它抽成一个共用函数，让目录条目和跳转目标不可能各说各话。
 - 条目渲染成 `<button type="button" data-newmd-toc-entry data-level data-text data-occurrence>`，**不发明 heading id**。Markdown 的标题没有 id，而 `(level, text, occurrence)` 是 `handle.ts` 已经定下的锚（ADR-0001 §2.3 / M4 大纲），再造一套 id 方案就有了第二个身份系统，还要让它扛住往返。按钮而不是 `<a>`：不需要 id、不改变 URL、键盘可聚焦是白拿的。（代价见 §3 导出。）
 - 点击在 `mousedown` 上 `preventDefault` 再在 `click` 里处理，焦点不会被按钮抢走。
-- 缩进按 `level - minLevel`。
+- 缩进按 `level - minLevel`，并把这个**差值**作为一个纯数字交给样式表（`--newmd-toc-indent`）：深度只有文档知道，而一级缩进多少宽度是外观。分工与 §2.8 一致。
 - 目录**不落盘、不参与撤销**：它是这个节点的渲染结果，不是文档内容。
 
 ### 2.7 重画时机
@@ -120,7 +122,7 @@ WYSIWYG 里 `[TOC]` 一旦成为独立段就立刻变成 `toc` 节点 —— 不
 
 核心只发射 `data-newmd-toc*` 属性，**样式写在 `packages/ui`**，与 `data-newmd-mermaid` / `data-newmd-frontmatter` 一致。这一片不引入任何面向读者的文案，因此不涉及双 locale。
 
-唯一例外是 §2.5 那两条 `display` 规则 —— 它们是这个两态机制本身，不是外观偏好，跟 Shiki 那片的 `highlight.css` 同理，需要随核心一起走。
+唯一例外是 §2.5 那两条 `display` 规则 —— 它们是这个两态机制本身，不是外观偏好，跟 Shiki 那片的 `highlight.css` 同理，需要随核心一起走：写在 `core/src/editor/toc.css`，由 `wysiwyg.ts` 引入。不写在 `toc.ts` 旁边，是因为**归并门槛 `markdown.ts` 也 import 那个模块**，而往返一行字节都不该依赖样式表。
 
 ---
 

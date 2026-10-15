@@ -48,8 +48,8 @@ import {
   remarkInlineLinkPlugin,
 } from "@milkdown/preset-commonmark";
 import { gfm, remarkGFMPlugin } from "@milkdown/preset-gfm";
-import type { Node as ProseNode } from "@milkdown/prose/model";
-import { Plugin, PluginKey, TextSelection } from "@milkdown/prose/state";
+import type { Node as ProseNode, NodeType } from "@milkdown/prose/model";
+import { Plugin, PluginKey, TextSelection, type EditorState } from "@milkdown/prose/state";
 import { Decoration, DecorationSet, type EditorView } from "@milkdown/prose/view";
 import { $markSchema, $nodeSchema, $prose, $view, replaceAll } from "@milkdown/utils";
 import type { Root } from "mdast";
@@ -61,6 +61,7 @@ import type { Plugin as RemarkPlugin } from "unified";
 import type {
   FindMatch,
   FindRequest,
+  HeadingTarget,
   ImageInsertion,
   MarkdownEditorHandle,
   MarkdownEditorOptions,
@@ -78,7 +79,11 @@ import { inlineMarkHandlers, remarkInlineMarks } from "./inline-marks";
 import { drawMermaid } from "./mermaid";
 import { renderMath } from "./math";
 import { inlineLinkReferences, stringifyOptions } from "./markdown";
-import { remarkToc } from "./toc";
+// The rules that read the mode this file decides (ADR-0002 §2.5, §2.8). Brought
+// in here rather than from `toc.ts` so that the merge gate, which imports that
+// module, stays free of a stylesheet: nothing about a round trip depends on one.
+import "./toc.css";
+import { fillTocList, remarkToc, tocEntryTarget, tocMarkerText, type TocEntry } from "./toc";
 
 /**
  * Milkdown's commonmark preset minus the step that eats link definitions.
@@ -628,6 +633,320 @@ const tocSchema = $nodeSchema("toc", () => ({
 }));
 
 /**
+ * The marker a ProseMirror block holds, or `null` when it holds something else.
+ *
+ * The engine's copy of `tocMarker` in `editor/toc.ts`, and it has to stay the
+ * same rule: one text node, no marks. `textContent` alone would claim
+ * `**[TOC]**`, and a block whose content is a code span would be claimed by
+ * anything that read the text back out of the tree — which is how a document
+ * that writes *about* the directive would end up invoking it.
+ */
+function tocMarkerOf(node: ProseNode): string | null {
+  if (node.childCount !== 1) return null;
+  const only = node.firstChild;
+  if (only === null || !only.isText || only.marks.length > 0) return null;
+  return tocMarkerText(only.text ?? "");
+}
+
+/**
+ * Keep a `toc` node and the marker it holds from drifting apart (ADR-0002 §2.4).
+ *
+ * Two directions, one rule, run after every change rather than on a key press:
+ *
+ * - a top-level paragraph that *is* the marker becomes the block, so typing
+ *   `[TOC]` is the whole gesture and there is no confirmation step to miss;
+ * - a block whose text is no longer the marker becomes a paragraph again, so
+ *   the reader can delete their way out of one.
+ *
+ * Reading the second direction as a nicety would be a mistake: it is what makes
+ * "a `toc` node holds exactly the marker" true by construction, and that
+ * invariant is what lets `toMarkdown` write a marker without checking.
+ *
+ * Running on every change, and not on an input rule, is deliberate — an input
+ * rule only fires where a key was pressed, and a `[TOC]` arriving by paste is
+ * the same text arriving by the same claim. Anything that left it a paragraph
+ * would be saved as `\[TOC]`.
+ *
+ * The document's own children only: `- [TOC]` and `> [TOC]` are paragraphs too,
+ * and the directive is a block of the document rather than a block of a block.
+ */
+const tocBlockKey = new PluginKey("newmd-toc-block");
+
+function tocBlock() {
+  return $prose(() => {
+    return new Plugin({
+      key: tocBlockKey,
+      appendTransaction: (transactions, _previous, state) => {
+        // Nothing moved, so nothing can have become or stopped being a marker.
+        if (!transactions.some((transaction) => transaction.docChanged)) return null;
+        const { toc, paragraph } = state.schema.nodes;
+        if (toc === undefined || paragraph === undefined) return null;
+
+        const wants: { at: number; type: NodeType }[] = [];
+        state.doc.forEach((node, offset) => {
+          if (node.type === paragraph) {
+            if (tocMarkerOf(node) !== null) wants.push({ at: offset, type: toc });
+          } else if (node.type === toc) {
+            if (tocMarkerOf(node) === null) wants.push({ at: offset, type: paragraph });
+          }
+        });
+        if (wants.length === 0) return null;
+
+        const transaction = state.tr;
+        for (const want of wants) transaction.setNodeMarkup(want.at, want.type);
+        // `setNodeMarkup` keeps the content, and these two node types hold the
+        // same five characters, so the block is the same size afterwards and
+        // the caret does not move. Out of the history all the same: what the
+        // reader did was type, and undo should give back a keystroke rather
+        // than undo the rule that noticed it.
+        return transaction.setMeta("addToHistory", false);
+      },
+    });
+  });
+}
+
+/** A heading of the document: the anchor, and where the caret lands for it. */
+interface DocumentHeading extends TocEntry {
+  /**
+   * Position just inside the heading, where a caret goes.
+   *
+   * One in from the node boundary on purpose: a selection at the boundary
+   * itself sits *before* the heading rather than in it, so the reader would
+   * land beside the target instead of on it.
+   */
+  at: number;
+}
+
+/**
+ * Every heading in the ProseMirror document, in order, with its anchor.
+ *
+ * The single walk behind both the outline's jump and the `[TOC]` block's
+ * entries (ADR-0002 §2.6). It has to stay single: the entries carry the anchor a
+ * click resolves, so a second walk that counted repeats differently — or
+ * flattened a heading's text differently — would draw a list whose entries send
+ * the reader to the wrong heading, in a document that looks perfectly fine.
+ *
+ * `occurrence` counts only headings that already match, which is what keeps a
+ * repeated title's number from moving when something unrelated is edited above
+ * it. `findMarkdownHeadings` in `outline.ts` counts the same way over mdast;
+ * the two must agree, because an anchor minted by one is resolved by the other.
+ */
+function headingsIn(doc: ProseNode): DocumentHeading[] {
+  const counted = new Map<string, number>();
+  const found: DocumentHeading[] = [];
+  doc.descendants((node, pos) => {
+    if (node.type.name !== "heading") return true;
+    const level = Number(node.attrs.level);
+    // `textContent` is what the reader sees, and what the source engine's
+    // `plainText` reads out of mdast — a heading the two flattened differently
+    // would be a heading this surface cannot be jumped to.
+    const text = node.textContent;
+    const key = `${level} ${text}`;
+    const occurrence = counted.get(key) ?? 0;
+    counted.set(key, occurrence + 1);
+    found.push({ level, text, occurrence, at: pos + 1 });
+    // A heading's content is its text, so there is no heading below one.
+    return false;
+  });
+  return found;
+}
+
+/** Put the caret on `target`, returning whether it was there to go to. */
+function revealHeadingIn(view: EditorView, target: HeadingTarget): boolean {
+  const found = headingsIn(view.state.doc).find(
+    (heading) =>
+      heading.level === target.level &&
+      heading.text === target.text &&
+      heading.occurrence === target.occurrence,
+  );
+  if (found === undefined) return false;
+  view.dispatch(
+    view.state.tr.setSelection(TextSelection.create(view.state.doc, found.at)).scrollIntoView(),
+  );
+  view.focus();
+  return true;
+}
+
+/**
+ * The `[TOC]` block as the reader sees it (ADR-0002 §2.5–§2.7).
+ *
+ * Two halves, both of them live at once: the entries, and the five characters
+ * the caret edits. Which of the two is on screen is decided by a `data-mode`
+ * decoration rather than by this view — `props.decorations` is recomputed on
+ * every state change, selection-only ones included, while a node view's `update`
+ * is only called when *this node* changes. A mode switch a caret can trigger is
+ * therefore not something a node view can see.
+ *
+ * The entries are the reader's content in a different sense from the marker: they
+ * are drawn from the document and never enter it. They are also drawn by a
+ * plugin, not by this view, because they change when a *heading* changes —
+ * which is not this node changing, and so not something `update` here would hear
+ * about (ADR-0002 §2.7).
+ */
+const tocView = $view(tocSchema.node, () => (node, view) => {
+  const owner = view.dom.ownerDocument;
+  const root = owner.createElement("div");
+  root.setAttribute("data-newmd-toc", "");
+  const list = owner.createElement("div");
+  list.setAttribute("data-newmd-toc-list", "");
+  // The contentDOM, and the only part ProseMirror owns. It comes second so that
+  // the source state — the one a missing decoration means — reads in the same
+  // order as the file.
+  const source = owner.createElement("div");
+  source.setAttribute("data-newmd-toc-source", "");
+  root.append(list, source);
+
+  // Drawn once here so a block that arrives mid-document is not blank until
+  // something else changes: the plugin below only redraws when the *headings*
+  // change, and a document that already had its headings has nothing to redraw
+  // when a `[TOC]` appears among them.
+  fillTocList(list, headingsIn(view.state.doc));
+
+  /** The entry button `event` landed on, if it landed on one. */
+  const entryOf = (event: Event): Element | null => {
+    const target = event.target;
+    if (!(target instanceof Element)) return null;
+    return target.closest("[data-newmd-toc-entry]");
+  };
+
+  /**
+   * Take the press, so the browser does not answer it by moving the caret here.
+   *
+   * What is being refused is the browser's own selection change: a pointer down
+   * inside the editable root collapses the selection into the block, which puts
+   * the block into its source state — and the click that follows would then be
+   * handled by a block the reader is watching turn into five characters. The
+   * caret goes where the entry says instead, in the handler below.
+   */
+  const onMouseDown = (event: MouseEvent): void => {
+    if (entryOf(event) !== null) event.preventDefault();
+  };
+
+  const onClick = (event: MouseEvent): void => {
+    const entry = entryOf(event);
+    if (entry === null) return;
+    const heading = tocEntryTarget(entry);
+    if (heading === null) return;
+    event.preventDefault();
+    // The same resolution `revealHeading` performs, out of the same walk — an
+    // entry that named a heading this could not find is an entry drawn from a
+    // document that has since moved on, and there is nowhere honest to go.
+    revealHeadingIn(view, heading);
+  };
+
+  root.addEventListener("mousedown", onMouseDown);
+  root.addEventListener("click", onClick);
+
+  return {
+    dom: root,
+    contentDOM: source,
+    // Everything outside `source` is ours — the entries, and the elements they
+    // are wrapped in. Claiming nothing here is not read as "the list is the
+    // document's": ProseMirror takes an unowned change outside the contentDOM
+    // for a change to the whole node, dirties it and builds it again. Measurably
+    // so — the block comes back as a different element with every keystroke
+    // anywhere in the document (see the identity assertion in
+    // `tests/toc-block.test.ts`), which is a redraw that costs the reader the
+    // block it was supposed to leave alone.
+    ignoreMutation: (mutation) => !source.contains(mutation.target),
+    destroy: () => {
+      root.removeEventListener("mousedown", onMouseDown);
+      root.removeEventListener("click", onClick);
+    },
+  };
+});
+
+const tocListKey = new PluginKey("newmd-toc-list");
+
+/**
+ * Keep every table of contents in step with the headings above it.
+ *
+ * The node view above draws the list a `[TOC]` starts with; this keeps it true
+ * afterwards. Editing a heading does not touch the `toc` node, so the node view
+ * hears nothing — the headings are a property of the whole document, and the
+ * whole document is what this watches.
+ *
+ * A signature rather than a redraw on every transaction, the same way
+ * `codeHighlight` decides: a cursor moving fires a transaction, and rebuilding
+ * every list on each one would throw away and recreate the very DOM the reader
+ * may be reaching for.
+ */
+function tocList() {
+  return $prose(() => {
+    /** The headings the lists on screen were drawn from. */
+    let confirmed: string | null = null;
+
+    /** What a set of headings looks like, as one string to compare against. */
+    const signature = (headings: TocEntry[]): string =>
+      headings
+        .map((heading) => `${heading.level}\u0000${heading.text}\u0000${heading.occurrence}`)
+        .join("\u0001");
+
+    const redraw = (view: EditorView): void => {
+      const headings = headingsIn(view.state.doc);
+      const wanted = signature(headings);
+      if (wanted === confirmed) return;
+      confirmed = wanted;
+      // Read off the DOM rather than kept in a set of hosts: a node view is
+      // created and destroyed by ProseMirror, and a registry of them here would
+      // be a second lifetime to keep in step with that one.
+      for (const list of view.dom.querySelectorAll<HTMLElement>("[data-newmd-toc-list]")) {
+        fillTocList(list, headings);
+      }
+    };
+
+    return new Plugin({
+      key: tocListKey,
+      view: (view) => {
+        // And the first pass is what settles `confirmed`.
+        redraw(view);
+        return {
+          update: (updated, previous) => {
+            if (updated.state.doc !== previous.doc) redraw(updated);
+          },
+        };
+      },
+    });
+  });
+}
+
+const tocModeKey = new PluginKey("newmd-toc-mode");
+
+/**
+ * Say which half of a `[TOC]` block is the one on screen (ADR-0002 §2.5).
+ *
+ * A node decoration rather than a field on the node view, and the reason is
+ * timing: `props.decorations` is recomputed on every state change, the
+ * selection-only transactions a caret produces included, while a node view's
+ * `update` is called only when its own node changes. The reader moving into the
+ * block changes neither the node nor the document, so of the two this is the
+ * only one that hears about it.
+ *
+ * The attribute means *preview*, and its absence means *source* — the direction
+ * a missing decoration has to fall in, because the five characters are what the
+ * block really holds and what a save writes.
+ */
+function tocMode() {
+  return $prose(() => {
+    const build = (state: EditorState): DecorationSet => {
+      const decorations: Decoration[] = [];
+      state.doc.forEach((node, offset) => {
+        if (node.type.name !== "toc") return;
+        const to = offset + node.nodeSize;
+        // Strictly inside: a selection at the block's own boundary is beside it
+        // rather than in it, and a caret parked there would be showing the five
+        // characters while the reader is looking at the list.
+        if (state.selection.from > offset && state.selection.to < to) return;
+        decorations.push(Decoration.node(offset, to, { "data-mode": "preview" }));
+      });
+      return DecorationSet.create(state.doc, decorations);
+    };
+
+    return new Plugin({ key: tocModeKey, props: { decorations: build } });
+  });
+}
+
+/**
  * `==highlight==` (ADR-0001 §2.4 常用扩展).
  *
  * mdast has no node type for this — the delimiter is recognised by
@@ -1124,6 +1443,12 @@ export async function createWysiwygEditor(
     // Takes the fences that one deliberately leaves alone.
     .use(mermaidSchema)
     .use(tocSchema)
+    .use(tocBlock())
+    // Both halves of the block's rendering, and both after the schema: each is
+    // keyed on the node type it draws.
+    .use(tocView)
+    .use(tocList())
+    .use(tocMode())
     // See the file header: this one is exported but not in the preset.
     .use(insertImageInputRule)
     .use(definitionSchema)
@@ -1176,31 +1501,11 @@ export async function createWysiwygEditor(
     revealHeading(target) {
       // Resolved in the ProseMirror document rather than against Markdown text:
       // this surface has no lines to jump to, which is the whole reason the
-      // anchor in `handle.ts` is a heading and not a position. Counting only
-      // headings that already match is what keeps a repeated title from
-      // landing on the wrong one.
-      const view = editor.ctx.get(editorViewCtx);
-      let matched = 0;
-      let at = -1;
-      view.state.doc.descendants((node, pos) => {
-        if (at >= 0) return false;
-        if (node.type.name !== "heading") return true;
-        if (node.attrs.level !== target.level || node.textContent !== target.text) return false;
-        if (matched === target.occurrence) {
-          // One in from the node boundary: a caret at the boundary itself sits
-          // before the heading rather than in it.
-          at = pos + 1;
-          return false;
-        }
-        matched += 1;
-        return true;
-      });
-      if (at < 0) return false;
-      view.dispatch(
-        view.state.tr.setSelection(TextSelection.create(view.state.doc, at)).scrollIntoView(),
-      );
-      view.focus();
-      return true;
+      // anchor in `handle.ts` is a heading and not a position. The walk itself
+      // lives in `headingsIn` because the `[TOC]` block's entries are drawn from
+      // it — the anchor an entry carries is resolved by the same arithmetic that
+      // minted it.
+      return revealHeadingIn(editor.ctx.get(editorViewCtx), target);
     },
     insertImage(image) {
       // `title` is a required string on the image schema, and ProseMirror
