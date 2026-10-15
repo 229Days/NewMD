@@ -18,21 +18,21 @@
 
 **进度**（ADR §4 里程碑）：
 
-| 里程碑                                  | 状态                                                                                                                                                        |
-| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| M1 壳与文件 IO                          | ✅                                                                                                                                                          |
-| M2 WYSIWYG 核心                         | ✅                                                                                                                                                          |
-| M3 源码模式与多标签                     | ✅                                                                                                                                                          |
-| M4 工作区与外观                         | ✅                                                                                                                                                          |
-| M5 扩展渲染                             | ✅ 七片全部合入（见 §3.1）                                                                                                                                  |
-| **v1.0 功能缺口**（用户本轮圈定的范围） | 🟡 **5/6**：拖拽 `d1c1a1d`、本地路径插入 `146452b`、front matter 编辑 `a370e1a`、Shiki 高亮 `8d7d81c`、`[TOC]` 目录 `190d1cc` + `5e35a48`；**剩 2 项见 §4** |
-| M6 导出与体验                           | ⬜ 未开始 —— 用户明确要求**排在功能缺口之后**                                                                                                               |
+| 里程碑                                  | 状态                                                                                                                                                                                                                                                                              |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M1 壳与文件 IO                          | ✅                                                                                                                                                                                                                                                                                |
+| M2 WYSIWYG 核心                         | ✅                                                                                                                                                                                                                                                                                |
+| M3 源码模式与多标签                     | ✅                                                                                                                                                                                                                                                                                |
+| M4 工作区与外观                         | ✅                                                                                                                                                                                                                                                                                |
+| M5 扩展渲染                             | ✅ 七片全部合入（见 §3.1）                                                                                                                                                                                                                                                        |
+| **v1.0 功能缺口**（用户本轮圈定的范围） | 🟡 **6/6 中 5 项完成**：拖拽 `d1c1a1d`、本地路径插入 `146452b`、front matter 编辑 `a370e1a`、Shiki 高亮 `8d7d81c`、`[TOC]` 目录 `190d1cc` + `5e35a48`、**重命名引用重写** `bb51e9b` `52198e5` `4ff3af9` `12738ae` `b7d3bbe` `ed5f6b9`（ADR-0003）；**只剩 WYSIWYG 多光标，见 §4** |
+| M6 导出与体验                           | ⬜ 未开始 —— 用户明确要求**排在功能缺口之后**                                                                                                                                                                                                                                     |
 
-**验证基线（HEAD = `5e35a48`，全部实测过）**：
+**验证基线（HEAD = `ed5f6b9`，全部实测过）**：
 
 | 检查                       | 结果                                                                         |
 | -------------------------- | ---------------------------------------------------------------------------- |
-| `pnpm test`                | core **378** / 32 文件，ui **24** / 4 文件 全绿                              |
+| `pnpm test`                | core **446** / 35 文件，ui **39** / 5 文件 全绿                              |
 | `pnpm typecheck`           | core / ui / desktop 三处 `tsc --noEmit` 全 0                                 |
 | prettier `--check`         | 全绿                                                                         |
 | `cargo check`（src-tauri） | 0                                                                            |
@@ -44,6 +44,12 @@
 **最近提交**（新到旧）：
 
 ```
+ed5f6b9 Let a row in the tree be renamed, and refuse the names that cannot be
+b7d3bbe Move the tabs, the tree and the disk in the one order that holds
+12738ae Land a rename's rewrite where each document actually lives
+4ff3af9 Respell a document's links when the file they point at moves
+52198e5 Write a destination relative to the document that carries it
+bb51e9b Decide how a rename rewrites the references (ADR-0003)
 5e35a48 Draw [TOC] as a list the reader can jump from (v1.0 gap: [TOC] 目录)
 190d1cc Give [TOC] a node of its own, so a save stops escaping it
 163f908 Bring HANDOFF.md up to date (4/6 v1.0 gaps)
@@ -215,7 +221,7 @@ jsdom **没有 `ClipboardEvent` / `DataTransfer`**（实测 `typeof` 均为 `und
 
 **已知未覆盖**：高亮不参与导出（M6 的一半）；`Decoration.inline` 不做 `mark`（代码块 `marks: ""`），
 所以是画上去的，不进文档；主题切换只有 CSS 一条路径，**没有测试能覆盖**（jsdom 不解析 `var()`），
-测试只能断言 `highlight.css` 里那条规则存在（见 §3.7 最后一条）。
+测试只能断言 `highlight.css` 里那条规则存在（见 §3.8 最后一条）。
 
 ### 3.6 v1.0 第 5 片：`[TOC]` 目录（`190d1cc` + `5e35a48`）
 
@@ -280,7 +286,47 @@ ProseMirror 于是把 contentDOM 之外的**任何**变更当成「整个节点�
 要在真浏览器手测一次；`[TOC]` **在列表项 / 引用块里仍会被转义成 `\[TOC]`**（§2.3 范围之外的原库行为，
 见 ADR-0002 §3）。
 
-### 3.7 可复用手法（下一片多半还要用）
+### 3.7 v1.0 第 6 片：重命名时的引用重写（ADR-0003）
+
+设计全在 `docs/adr/0003-rename-reference-rewrite.md`，这里只记**落地与踩到的**。
+
+**六条提交**：`bb51e9b` 定案 → `52198e5` 相对路径写法 → `4ff3af9` 单文档重写 →
+`12738ae` 落到每个文档 → `b7d3bbe` 编排顺序 → `ed5f6b9` 树上的入口。
+
+**引擎的核心一步是「算绝对值再重新拼」**：拿**文档移动前**的目录（由 `pathAfterMove(documentPath, to, from)`
+反解）把相对目标解成绝对路径，过一遍 `(from, to)`，再相对**新**目录拼回去。两个方向
+（文档自己动了 / 文档没动但指向的东西动了）都是这三步。`pathAfterMove` 落在
+`platform/path.ts`，是纯算术，**不是适配器方法** —— 加一个适配器方法要同步 browser + tauri + 7 个 fake。
+
+**定点拼接，不走 parse → stringify**：往返会把读者没碰过的格式一起改掉（强制 `-` 列表符、
+引用式链接展平）。改成对 `parse()` 的原始树**逐节点量出 span 再 splice**，没碰的字节一个不差。
+
+**三个反直觉处，都写进了测试**：
+
+- **围栏代码块里的链接形状文本**：正则扫全文会改到它，所以必须走树（`code` 节点的 span 包含那些字）。
+- **mdast 的 `url` 已经解码了反斜杠转义**（`./a\(b\).md` → `./a(b).md`），**但保留百分号编码**。
+  回写时要按作者原来的拼法还原，所以每种拼法（原样 / 转义 / 各自加尖括号）都试一遍。
+- **`unrewritten` 不是「没找到」而是「找到了但改不了」**：跨盘符时没有合法相对路径，
+  计数并留着原样，比写一个指向虚空的路径诚实。
+
+**编排的顺序是设计本身**，每条都由一个失败模式逼出来（`renameEntry` 的注释里也写着）：
+标签先动（自动保存按标签的 `path` 写、Rust 侧 `ensure_parent` 会 `create_dir_all`，
+标签留在旧路径就等于**800ms 后把旧文件原地写回来**）→ 磁盘再动（**失败要回滚标签**，
+否则标签指着不存在的路径，下一次自动保存把文件写回来）→ 树再动（它的重列必须看见已经
+移动过的磁盘）→ 最后重写引用（被改名那篇文档要从**新**目录读，那是它自己链接的解析基准）。
+
+**UI 半边**：双击行进改名态（单击在树里已经有主了：打开 / 折叠），失焦等同 Esc。
+判定名字用**重新列一遍文件夹**而不是树里的缓存 —— 缓存里没有刚建的文件，拿它判就是
+把已占用的名字交给文件系统，而 POSIX 的 `rename(2)` 会**直接覆盖**。
+`checkRename` 是纯函数（`core/src/rename.ts`），所以大小写不敏感这条只在它身上测一次：
+`a.md` → `A.md` 按**路径**排除自己，不能判成撞名。
+
+**扫描收窄成只读 Markdown**（ADR-0003 §2.9 记了这条修正）：别的文件里的相对路径在这个
+编辑器里根本不会显示成链接。跳过的是**读取**不是**遍历**，目录照常往下走。
+
+**没有新语法 → 没有 golden 语料**（§2 约束 2 的分界）：这一片不碰序列化器，往返语料不动。
+
+### 3.8 可复用手法（下一片多半还要用）
 
 - **双引擎共用一个行为** → 在 `options.parent` 上挂 capture 监听（§3.2）。测试时注意：
   **`dragover` 要派发在 host 上**（ProseMirror 的 `editHandlers.dragover` 无条件 `preventDefault`，
@@ -330,24 +376,15 @@ ProseMirror 于是把 contentDOM 之外的**任何**变更当成「整个节点�
 
 ---
 
-## 4. 下一步：剩余 2 个功能缺口（**本轮范围**，用户已勾选「功能缺口」这一类）
+## 4. 下一步：剩余的 v1.0 功能缺口（**本轮范围**）
 
-> 顺序建议：先问用户定范围的（①）→ 再做要查清可行性的（②）。
 > 每一片都走 `/tdd`：先失败测试，再最小实现，再重构。
 >
-> 已完成 5 片：拖拽（§3.2）、本地路径插入（§3.3）、front matter 编辑（§3.4）、
-> Shiki 高亮（§3.5）、`[TOC]` 目录（§3.6）。下面这两项是剩下的。
+> 已完成 6 项：拖拽（§3.2）、本地路径插入（§3.3）、front matter 编辑（§3.4）、
+> Shiki 高亮（§3.5）、`[TOC]` 目录（§3.6）、**重命名引用重写（§3.7）**。
+> 下面这一项是最后剩下的。
 
-### ① 文件重命名/移动的**引用重写**（ADR 行 146）
-
-- **现状（本轮核实）**：`PlatformAdapter.renamePath` 三端都在
-  （browser 明确 `throw PlatformError("Rename is not supported…")`、tauri 有 `rename_path` 命令），
-  **但全仓没有一个调用方，也没有任何重命名 UI**（`packages/ui/src` 里搜不到 rename）。
-  所以这件事是**两段**：先把重命名暴露出来，再在重命名时重写引用。
-- ⚠️ **动手前先问用户**：ADR §6 未决问题 **5** 就是它 —— 「只覆盖图片，还是覆盖所有相对链接
-  （含跨文件链接）」。范围不同，工作量差一个量级。
-- 参考：`paste-image.ts` 已经把「相对路径写法」的规矩写死了（`./assets/…`，从不写绝对路径），
-  重写时按同一套语义反解。
+### ① ✅ 文件重命名/移动的**引用重写**（ADR 行 146）—— 已完成，见 §3.7
 
 ### ② WYSIWYG 多光标（ADR 行 92、行 158）
 
@@ -375,7 +412,7 @@ ProseMirror 于是把 contentDOM 之外的**任何**变更当成「整个节点�
 
 | 项                          | 核实结果                                                                                                                                                         |
 | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `find.openHint` 死 key      | ✅ 成立：`zh-CN.json:60` / `en-US.json:60` 有，**源码无一处引用**。守卫只查 `t(` 能解析，不查反向                                                                |
+| `find.openHint` 死 key      | ✅ 成立：`zh-CN.json:68` / `en-US.json:68` 有，**源码无一处引用**。守卫只查 `t(` 能解析，不查反向                                                                |
 | `RECOVERY_KEY` 只写不读     | ✅ 成立：`core/src/autosave.ts:15` 声明、`:99` 写入，**全仓无读取** —— 崩溃恢复没接上                                                                            |
 | 找替换缺「N/M」计数         | ✅ 成立：`FindReplace.tsx` 只有 `find.noMatches`，没有当前第几个 / 共几个                                                                                        |
 | `pnpm build` chunk 体积警告 | ✅ 成立且**变大**：`index` 1.63 MB、`elk` 1.47 MB、`cynefin` 688 KB、`mermaid.core` 669 KB；Shiki 之后产物 371 个 chunk / 16.2 MB（见 §3.5，用户已拍板保持全量） |
@@ -413,8 +450,10 @@ pnpm typecheck                              # 三处 tsc --noEmit
 node node_modules/prettier/bin/prettier.cjs --check "packages/**/*.{ts,tsx,md,css}"
 
 # 单跑一个包 / 一个文件（包内 vitest，别用 npx）
-node packages/core/node_modules/vitest/vitest.mjs run --root packages/core tests/local-image.test.ts
-node packages/ui/node_modules/vitest/vitest.mjs run --root packages/ui tests/insert-image.test.tsx
+# ⚠️ 必须**先 cd 进包**，不能从仓库根加 --root：highlight.test.ts 与 toc-block.test.ts
+#    按 cwd 读 CSS，cwd 在包外时这两条会挂。
+cd packages/core && node node_modules/vitest/vitest.mjs run tests/local-image.test.ts
+cd packages/ui   && node node_modules/vitest/vitest.mjs run tests/insert-image.test.tsx
 
 cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml
 pnpm build                                  # vite 产物体检
