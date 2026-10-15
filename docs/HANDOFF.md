@@ -18,32 +18,33 @@
 
 **进度**（ADR §4 里程碑）：
 
-| 里程碑                                  | 状态                                                                                              |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| M1 壳与文件 IO                          | ✅                                                                                                |
-| M2 WYSIWYG 核心                         | ✅                                                                                                |
-| M3 源码模式与多标签                     | ✅                                                                                                |
-| M4 工作区与外观                         | ✅                                                                                                |
-| M5 扩展渲染                             | ✅ 七片全部合入（见 §3.1）                                                                        |
-| **v1.0 功能缺口**（用户本轮圈定的范围） | 🟡 **3/6**：拖拽 `d1c1a1d`、本地路径插入 `146452b`、front matter 编辑 `a370e1a`；**剩 4 项见 §4** |
-| M6 导出与体验                           | ⬜ 未开始 —— 用户明确要求**排在功能缺口之后**                                                     |
+| 里程碑                                  | 状态                                                                                                                    |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| M1 壳与文件 IO                          | ✅                                                                                                                      |
+| M2 WYSIWYG 核心                         | ✅                                                                                                                      |
+| M3 源码模式与多标签                     | ✅                                                                                                                      |
+| M4 工作区与外观                         | ✅                                                                                                                      |
+| M5 扩展渲染                             | ✅ 七片全部合入（见 §3.1）                                                                                              |
+| **v1.0 功能缺口**（用户本轮圈定的范围） | 🟡 **4/6**：拖拽 `d1c1a1d`、本地路径插入 `146452b`、front matter 编辑 `a370e1a`、Shiki 高亮 `8d7d81c`；**剩 3 项见 §4** |
+| M6 导出与体验                           | ⬜ 未开始 —— 用户明确要求**排在功能缺口之后**                                                                           |
 
-**验证基线（HEAD = `a370e1a`，全部实测过）**：
+**验证基线（HEAD = `8d7d81c`，全部实测过）**：
 
-| 检查                       | 结果                                                                    |
-| -------------------------- | ----------------------------------------------------------------------- |
-| `pnpm test`                | core **335** / 29 文件，ui **24** / 4 文件 全绿                         |
-| `pnpm typecheck`           | core / ui / desktop 三处 `tsc --noEmit` 全 0                            |
-| prettier `--check`         | 全绿                                                                    |
-| `cargo check`（src-tauri） | 0                                                                       |
-| `pnpm build`               | 0（有 chunk 体积警告，见 §5.2）                                         |
-| golden                     | `packages/core/tests/golden/` **20 个语料**，其中 6 个带 `.expected.md` |
+| 检查                       | 结果                                                                         |
+| -------------------------- | ---------------------------------------------------------------------------- |
+| `pnpm test`                | core **341** / 30 文件，ui **24** / 4 文件 全绿                              |
+| `pnpm typecheck`           | core / ui / desktop 三处 `tsc --noEmit` 全 0                                 |
+| prettier `--check`         | 全绿                                                                         |
+| `cargo check`（src-tauri） | 0                                                                            |
+| `pnpm build`               | 0（有 chunk 体积警告，见 §5.2；Shiki 让产物从 5.2 MB 涨到 16.2 MB，见 §3.5） |
+| golden                     | `packages/core/tests/golden/` **20 个语料**，其中 6 个带 `.expected.md`      |
 
 **每改一行都应复现这一基线**，命令见 §7。
 
 **最近提交**（新到旧）：
 
 ```
+8d7d81c Colour fenced code with Shiki (v1.0 gap: Shiki 代码高亮)
 a370e1a Let the reader edit front matter in place (v1.0 gap: front matter 可视化编辑)
 ccda530 Bring HANDOFF.md up to date (M5 done, 2/6 v1.0 gaps)
 146452b Insert an image picked from disk (v1.0 gap: 本地路径插入)
@@ -69,7 +70,7 @@ b88df55 Initial commit: NewMD through M4
    **任何新的 _语法_**（不是新的渲染方式）都要：往 `packages/core/tests/golden/` 补语料 +
    在 `tests/golden.ts` 的 `EXERCISES` 里登记对应 mdast 节点类型
    （节点类型必须落在 `parse()` ∪ `parseTransformed()` 的并集里，否则守卫会红）。
-3. **不得破坏** open / save / autosave / session / recovery 链路与既有测试（当前 335 + 24）。
+3. **不得破坏** open / save / autosave / session / recovery 链路与既有测试（当前 341 + 24）。
 4. **文案双 locale 外置**：`packages/core/src/locales/{zh-CN,en-US}.json`，两套 key 集合必须一致
    （`i18n-coverage.test.ts` 守着），新 key 按字母序插入。React 侧只能通过 `useT()` 拿 `t`。
    - **今天踩到的新规则**：`leaves no raw copy in a ternary or nullish operand` 这一条的正则是
@@ -161,7 +162,59 @@ KaTeX 数学、`^sup^` / `~sub~`、`==highlight==`、脚注、YAML front matter 
 jsdom **没有 `ClipboardEvent` / `DataTransfer`**（实测 `typeof` 均为 `undefined`），
 写测试只能用假事件对象，届时自己判断值不值得。
 
-### 3.5 四条可复用手法（下一片多半还要用）
+### 3.5 v1.0 第 4 片：Shiki 代码高亮（`8d7d81c`）
+
+`core/src/editor/highlight.ts`（新）+ `highlight.css`（新）+ `wysiwyg.ts` 里的 `codeHighlight()`
+
+- `core/tests/highlight.test.ts`（新，6 条）。依赖 `shiki@^4.5.0` 装在 `packages/core`。
+  **没有新语法 → 没加语料**；**没有新文案**（高亮不产生可见文字）。
+
+| 落点                    | 内容                                                                                                     |
+| ----------------------- | -------------------------------------------------------------------------------------------------------- |
+| `highlight(code, lang)` | 走 `codeToTokens`（双主题 `github-light` / `github-dark`），返回 `{ offset, text, style }[]`；**有缓存** |
+| `highlighted(...)`      | 同步读缓存，返回 `undefined` = 还没好、`null` = 永远好不了（**两者必须分开**，画帧的人得区分）           |
+| `codeHighlight()`       | `$prose` 插件：`Decoration.inline` 逐 token 上色，`data-newmd-token` + `style` 两个属性                  |
+| `highlight.css`         | `[data-theme="dark"] [data-newmd-token] { color: var(--shiki-dark) !important }` —— 暗色半边就这一条规则 |
+| `ensure(view)`          | 文档变了才去问 Shiki；`Promise.all` 全部回来后才 dispatch 一次刷新                                       |
+
+**为什么是装饰器而不是 NodeView**：代码块必须还是读者自己的文本 —— 原地可编辑、一条撤销栈、
+和别的块走同一个序列化器。NodeView 要亲手把这四样一一交还，而第一个会坏的就是 round-trip 门槛。
+装饰器只说「这一段怎么画」，文档一个字没动 —— 所以 `getContent()` **根本看不出高亮有没有跑过**，
+测试只能问 DOM（这也是 `tests/highlight.test.ts` 的断言全在 DOM 上的原因）。
+
+**异步，而且是「陈旧」而不是「空白」**：一次按键让整块 token 全部作废。等新 token 时先把颜色清掉，
+等于每个字符都在光标周围重建 span。所以旧装饰器**跟着 `tr.mapping` 平移**留在屏上，新 token 到了再换。
+两个防抖条件：`signature` 变了才重新问；回来时若文档已再度变化就**丢掉这次刷新**（谁持有文档谁刷）。
+再有一条：**整个文档的围栏都回来才重绘**，否则慢一拍的块会在邻居刷新时丢掉颜色。
+
+**主题为什么不用重算**：每个 token 同时带 `color`（亮色）与 `--shiki-dark`（暗色），
+`[data-theme]` 翻转时由 CSS 读第二个。这比 mermaid 的处境好 —— mermaid 的颜色已经被库烤进 SVG 了，
+只能重画（`mermaid.ts` 的 `watchTheme`），代码块是文本，所以能省掉这次重算。
+`!important` 是必需的：亮色写在元素自己的 `style` 上，没有选择器能盖过它。
+亮色**故意留在行内**，这样即使样式表没加载（把标记复制到别处），块也还是有颜色。
+
+**`highlight.css` 放在 core 是一次有意的例外**：本项目此前的分工是「core 只吐 `data-newmd-*` 属性，
+样式在 `packages/ui/src/styles.css`」（front matter、mermaid 都这样）。这里不这么分，是因为
+`--shiki-dark` 与读它的那条规则是**同一个机制的两半**，分在两个包里迟早会有一半先发出去，
+而缺了规则的暗色文档是「亮色被当成暗色用」且**屏幕上没有任何迹象**。
+`math.ts` 自带 KaTeX 样式表是同一个理由。
+
+**已验证的体积代价（用户拍板：保持全量）**：`import()` 生效 —— 1.6 MB 的入口 chunk 里
+**Shiki 出现 0 次**，Shiki 自己在 `index-P_WAeC7R.js`（211 KB），文档里没有围栏就一行都不加载。
+但全量语言包带来 **309 个按需加载的语法 chunk**：`apps/desktop` 产物从 **5.2 MB → 16.2 MB**
+（11 MB 是语法）。启动与内存不受影响，只拉围栏实际点名的那个语言。
+要收窄就改用 `shiki/core` + 显式导入语言表（`shiki/bundle/web` **不够**：实测缺 `rust` / `go` /
+`diff` / `toml` / `zig`，只适合网页，不适合文档编辑器）。
+
+**未知语言是一种值，不是异常**：Shiki 对没有语法的围栏**抛异常**
+（``Language `x` is not included in this bundle``），而 README 里 ` ```output ` / ` ```text `
+是日常写法。`tokenize` 把失败 `catch` 成 `null` —— 那是「按纯文本画」，不是「文档打不开」。
+
+**已知未覆盖**：高亮不参与导出（M6 的一半）；`Decoration.inline` 不做 `mark`（代码块 `marks: ""`），
+所以是画上去的，不进文档；主题切换只有 CSS 一条路径，**没有测试能覆盖**（jsdom 不解析 `var()`），
+测试只能断言 `highlight.css` 里那条规则存在（见 §3.6 最后一条）。
+
+### 3.6 五条可复用手法（下一片多半还要用）
 
 - **双引擎共用一个行为** → 在 `options.parent` 上挂 capture 监听（§3.2）。测试时注意：
   **`dragover` 要派发在 host 上**（ProseMirror 的 `editHandlers.dragover` 无条件 `preventDefault`，
@@ -186,25 +239,31 @@ jsdom **没有 `ClipboardEvent` / `DataTransfer`**（实测 `typeof` 均为 `und
   `stopEvent` / `ignoreMutation` / `update` 的取舍见 §3.4 的表格；`update` 返回 `true`
   并且不动 DOM，是「编辑期间光标不被抢走」的关键。
 
+- **异步结果画进 ProseMirror** → 插件 `state` 存 `DecorationSet`，`props.decorations` 读它；
+  文档变了先 `previous.map(tr.mapping, tr.doc)`（陈旧但不动光标），结果回来再
+  `view.dispatch(tr.setMeta(key, true).setMeta("addToHistory", false))`，`apply` 见 meta 才重建。
+  两个坑：**meta 事务不改 doc，所以 `changeWatcher` 不会误报编辑**（它比对 `view.state.doc`），
+  但也**别忘 `addToHistory: false`**；`view.update` 里要用 `updated.state.doc !== previous.doc`
+  挡掉纯选择变化，否则每次移动光标都全文档走一遍。
+- **给「异步之后的 DOM」写测试**：`vi.waitFor` 等正向信号；断言「没有东西」时要找一个
+  确定性的时钟（这里是**同一文档里另一个能高亮的围栏** —— 全回来才重绘，所以它上色就代表另一个也问完了）。
+  另外 **ProseMirror 不监听 `input` 事件**，它靠 MutationObserver；`wysiwyg-input.test.ts` 的
+  `await new Promise(r => setTimeout(r, 0))` 不是凑数，是等 flush，照抄。
+  **`import.meta.url` 在 jsdom 环境下不是 `file:` URL**，测试里 `readFile` 要用包根相对路径。
+- **只存在于 CSS 级联里的半边**（`var()`）：jsdom 不解析自定义属性，写不出行为测试。
+  退而求其次断言**文件内容**（规则存在），并在注释里讲清为什么只能做到这一步 ——
+  比假装它被覆盖了强。
+
 ---
 
-## 4. 下一步：剩余 4 个功能缺口（**本轮范围**，用户已勾选「功能缺口」这一类）
+## 4. 下一步：剩余 3 个功能缺口（**本轮范围**，用户已勾选「功能缺口」这一类）
 
 > 顺序建议：先问用户定范围的（②）→ 再做有 golden 硬门槛的（③）→ 其余按依赖排。
 > 每一片都走 `/tdd`：先失败测试，再最小实现，再重构。
+>
+> ①Shiki 已完成（`8d7d81c`，见 §3.5），下面从 `[TOC]` 起。
 
-### ① Shiki 代码高亮（ADR §2.5、§2.11，行 94 / 117 / 189）
-
-- **现状**：全仓**没有任何 `shiki` 依赖**。WYSIWYG 侧是 `wysiwyg.ts:448` 的 `codeBlockSchema`
-  （普通代码块，无高亮）；源码模式是 CodeMirror 自带高亮。ADR 要求「WYSIWYG 与导出 HTML 共用
-  同一套高亮」「主题随应用主题联动」。
-- **落点**：`packages/core/src/editor/`（引擎层）+ 依赖装在 `packages/core`。
-- **注意**：只改 DOM 不改序列化 → **不用**加语料；一旦语言元信息参与序列化就必须补语料并登记
-  `EXERCISES`。M6 导出 HTML 要复用同一套，别写成只服务编辑器的一次性渲染。
-- **先想清楚**：整块重渲染 vs 逐 token；模式切换（`setMode`）后高亮状态怎么活下来。
-  大概率要一个 `code_block` 的 NodeView —— 手法和坑见 §3.5 最后一条（`$view` + `.node`）。
-
-### ② `[TOC]` 目录（ADR 行 78「常用扩展」）
+### ① `[TOC]` 目录（ADR 行 78「常用扩展」）
 
 - **现状**：全仓搜不到 `[TOC]`，**一条都没有**。
 - **这是新语法 → golden 硬门槛**：补语料 + 登记 `EXERCISES`（§2 约束 2）。
@@ -213,7 +272,7 @@ jsdom **没有 `ClipboardEvent` / `DataTransfer`**（实测 `typeof` 均为 `und
   那是另一套往返契约 —— 想清楚再动手。跳转必须走 `MarkdownSurface` 的方法（ADR §2.3），
   UI 不得摸引擎。
 
-### ③ 文件重命名/移动的**引用重写**（ADR 行 146）
+### ② 文件重命名/移动的**引用重写**（ADR 行 146）
 
 - **现状（本轮核实）**：`PlatformAdapter.renamePath` 三端都在
   （browser 明确 `throw PlatformError("Rename is not supported…")`、tauri 有 `rename_path` 命令），
@@ -224,10 +283,10 @@ jsdom **没有 `ClipboardEvent` / `DataTransfer`**（实测 `typeof` 均为 `und
 - 参考：`paste-image.ts` 已经把「相对路径写法」的规矩写死了（`./assets/…`，从不写绝对路径），
   重写时按同一套语义反解。
 
-### ④ WYSIWYG 多光标（ADR 行 92、行 158）
+### ③ WYSIWYG 多光标（ADR 行 92、行 158）
 
 - **现状（本轮核实）**：源码模式多光标由 CodeMirror 自带（ADR 行 158 明确选型理由就是它）；
-  WYSIWYG 侧 `wysiwyg.ts` 的 `.use(...)` 列表（937–961 行）**没有任何多光标配置，也没有测试**。
+  WYSIWYG 侧 `wysiwyg.ts` 的 `.use(...)` 列表（1063–1085 行）**没有任何多光标配置，也没有测试**。
   在 `prosemirror-state@1.4.4` / `prosemirror-view` 的 `dist` 里也搜不到
   `rectangularSelection` / `crosshairCursor` 这类现成导出 —— 可能在别处、要自己写 plugin，
   或者 Milkdown 根本没开。
@@ -248,13 +307,13 @@ jsdom **没有 `ClipboardEvent` / `DataTransfer`**（实测 `typeof` 均为 `und
 
 ### 5.2 小修清账（**逐条本轮核实过**）
 
-| 项                          | 核实结果                                                                                                                                             |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `find.openHint` 死 key      | ✅ 成立：`zh-CN.json:60` / `en-US.json:60` 有，**源码无一处引用**。守卫只查 `t(` 能解析，不查反向                                                    |
-| `RECOVERY_KEY` 只写不读     | ✅ 成立：`core/src/autosave.ts:15` 声明、`:99` 写入，**全仓无读取** —— 崩溃恢复没接上                                                                |
-| 找替换缺「N/M」计数         | ✅ 成立：`FindReplace.tsx` 只有 `find.noMatches`，没有当前第几个 / 共几个                                                                            |
-| `pnpm build` chunk 体积警告 | ✅ 成立：`index` 1.63 MB、`elk` 1.47 MB、`cynefin` 688 KB、`mermaid.core` 669 KB                                                                     |
-| 状态栏 WYSIWYG 光标不更新   | ❌ **不成立，别去修**：`wysiwyg.ts` 的 `changeWatcher` 已在 selection 变化时回调 `onCursorChange`，`EditorPane` 也接了 `setCursor`，两条引擎路径都通 |
+| 项                          | 核实结果                                                                                                                                                         |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `find.openHint` 死 key      | ✅ 成立：`zh-CN.json:60` / `en-US.json:60` 有，**源码无一处引用**。守卫只查 `t(` 能解析，不查反向                                                                |
+| `RECOVERY_KEY` 只写不读     | ✅ 成立：`core/src/autosave.ts:15` 声明、`:99` 写入，**全仓无读取** —— 崩溃恢复没接上                                                                            |
+| 找替换缺「N/M」计数         | ✅ 成立：`FindReplace.tsx` 只有 `find.noMatches`，没有当前第几个 / 共几个                                                                                        |
+| `pnpm build` chunk 体积警告 | ✅ 成立且**变大**：`index` 1.63 MB、`elk` 1.47 MB、`cynefin` 688 KB、`mermaid.core` 669 KB；Shiki 之后产物 371 个 chunk / 16.2 MB（见 §3.5，用户已拍板保持全量） |
+| 状态栏 WYSIWYG 光标不更新   | ❌ **不成立，别去修**：`wysiwyg.ts` 的 `changeWatcher` 已在 selection 变化时回调 `onCursorChange`，`EditorPane` 也接了 `setCursor`，两条引擎路径都通             |
 
 ### 5.3 文档与合规
 
@@ -273,7 +332,10 @@ jsdom **没有 `ClipboardEvent` / `DataTransfer`**（实测 `typeof` 均为 `und
 - `packages/export` **不存在**，一行都没有。
 - 已知风险（ADR §5）：中文 PDF 分页 / 字体嵌入（中等难度，`@page` + 系统字体栈 + 分页符 / 孤行控制）。
 - 未决问题 2（签名与自动更新）、3（Word 复杂场景降级）、4（拼写检查深度）都还没答。
-- Shiki（§4 ①）与导出 HTML 是同一套高亮 —— **做 ① 时给 M6 留口**。
+- Shiki 已合入（§3.5），M6 导出 HTML 要复用同一套 —— 给 M6 留的口是：
+  `highlight(code, lang)` 返回的 `{ offset, text, style }[]` 与编辑器形状无关，导出侧直接可用；
+  但**暗色半边在 `highlight.css` 里**，导出的静态 HTML 必须把那条规则一起带上（或按当前主题烘成单色）。
+  导出侧**不要**重新 `import("shiki")` 一套自己的 tokenizer，否则两边迟早会分叉。
 
 ---
 
