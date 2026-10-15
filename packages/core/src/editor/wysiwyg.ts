@@ -50,7 +50,7 @@ import {
 import { gfm, remarkGFMPlugin } from "@milkdown/preset-gfm";
 import { Plugin, PluginKey, TextSelection } from "@milkdown/prose/state";
 import type { EditorView } from "@milkdown/prose/view";
-import { $markSchema, $nodeSchema, $prose, replaceAll } from "@milkdown/utils";
+import { $markSchema, $nodeSchema, $prose, $view, replaceAll } from "@milkdown/utils";
 import type { Root } from "mdast";
 import { SearchQuery, type SearchResult } from "prosemirror-search";
 import remarkGfm from "remark-gfm";
@@ -221,13 +221,70 @@ const definitionSchema = $nodeSchema("definition", () => ({
  * comments dropped, keys reordered, quoting normalised — and every one of
  * those would have to be declared as an accepted rewrite in the corpus.
  *
- * Which makes this a view over bytes that stay put: the rows split a line into
- * a key and a value so a stylesheet can tell them apart, and nothing they show
- * is ever written back. The reader edits the source in source mode. Making the
- * rows themselves writable (ADR-0001 §2.5 可视化编辑) needs that write path
- * first; the milestone this belongs to only asks that the metadata be visible.
+ * Which is why the write path (ADR-0001 §2.5 可视化编辑) is a *view* and not a
+ * parser: the rows split a line into a key and a value so a stylesheet can tell
+ * them apart, the reader types into a row, and what goes back into `value` is
+ * the rows joined by newlines — the same split `toDOM` makes and `parseDOM`
+ * undoes. Nothing here is ever understood as YAML, so nothing can be rewritten
+ * by being understood.
  */
 const FRONT_MATTER_FIELD = /^([\w.-]+):(?:[ \t]+(.*))?$/;
+
+/** One `div[data-line]` per source line, key and value split out for styling. */
+function frontMatterRows(value: string): HTMLDivElement {
+  const panel = document.createElement("div");
+  panel.setAttribute("data-newmd-frontmatter", "");
+  for (const line of value.split("\n")) {
+    const row = document.createElement("div");
+    row.setAttribute("data-line", "");
+    const field = FRONT_MATTER_FIELD.exec(line);
+    if (field === null) {
+      // An indented list item, a comment, a continuation line: shown as it
+      // was typed. This reads lines, it does not parse YAML, so a shape it
+      // does not recognise shows one row rather than losing the text.
+      row.textContent = line;
+    } else {
+      const key = field[1] ?? "";
+      const rawValue = field[2];
+      const keyPart = document.createElement("span");
+      keyPart.setAttribute("data-key", "");
+      keyPart.textContent = key;
+      row.append(keyPart);
+      if (rawValue === undefined) {
+        // A key with nothing after the colon (`tags:`) — the rest of the
+        // line is separator, not value.
+        row.append(line.slice(key.length));
+      } else {
+        // The colon and whatever spacing the source used between it and the
+        // value. Taken by length rather than re-derived, so the row reads
+        // back as the exact line it was split out of.
+        const gap = line.length - key.length - rawValue.length;
+        row.append(line.slice(key.length, key.length + gap));
+        const valuePart = document.createElement("span");
+        valuePart.setAttribute("data-value", "");
+        valuePart.textContent = rawValue;
+        row.append(valuePart);
+      }
+    }
+    panel.append(row);
+  }
+  return panel;
+}
+
+/** The same rows, with each one accepting the caret. */
+function editableFrontMatterRows(value: string): HTMLDivElement {
+  const panel = frontMatterRows(value);
+  for (const row of Array.from(panel.querySelectorAll("[data-line]"))) {
+    if (!(row instanceof HTMLElement)) continue;
+    // The attribute rather than the `contentEditable` property: this is the
+    // spelling a browser reflects it back to anyway, and the one jsdom — where
+    // the node view is exercised — keeps.
+    row.setAttribute("contenteditable", "true");
+    // One line of YAML has no prose in it to spellcheck.
+    row.setAttribute("spellcheck", "false");
+  }
+  return panel;
+}
 
 const frontMatterSchema = $nodeSchema("yaml", () => ({
   group: "block",
@@ -238,45 +295,9 @@ const frontMatterSchema = $nodeSchema("yaml", () => ({
   attrs: {
     value: { default: "", validate: "string" },
   },
-  toDOM: (node) => {
-    const panel = document.createElement("div");
-    panel.setAttribute("data-newmd-frontmatter", "");
-    for (const line of String(node.attrs.value ?? "").split("\n")) {
-      const row = document.createElement("div");
-      row.setAttribute("data-line", "");
-      const field = FRONT_MATTER_FIELD.exec(line);
-      if (field === null) {
-        // An indented list item, a comment, a continuation line: shown as it
-        // was typed. This reads lines, it does not parse YAML, so a shape it
-        // does not recognise shows one row rather than losing the text.
-        row.textContent = line;
-      } else {
-        const key = field[1] ?? "";
-        const rawValue = field[2];
-        const keyPart = document.createElement("span");
-        keyPart.setAttribute("data-key", "");
-        keyPart.textContent = key;
-        row.append(keyPart);
-        if (rawValue === undefined) {
-          // A key with nothing after the colon (`tags:`) — the rest of the
-          // line is separator, not value.
-          row.append(line.slice(key.length));
-        } else {
-          // The colon and whatever spacing the source used between it and the
-          // value. Taken by length rather than re-derived, so the row reads
-          // back as the exact line it was split out of.
-          const gap = line.length - key.length - rawValue.length;
-          row.append(line.slice(key.length, key.length + gap));
-          const valuePart = document.createElement("span");
-          valuePart.setAttribute("data-value", "");
-          valuePart.textContent = rawValue;
-          row.append(valuePart);
-        }
-      }
-      panel.append(row);
-    }
-    return panel;
-  },
+  // Still the plain rows: this is what a copy or an export walks, and a row
+  // that carries the caret is not something to paste.
+  toDOM: (node) => frontMatterRows(String(node.attrs.value ?? "")),
   parseDOM: [
     {
       tag: "div[data-newmd-frontmatter]",
@@ -302,6 +323,107 @@ const frontMatterSchema = $nodeSchema("yaml", () => ({
     },
   },
 }));
+
+/**
+ * The reader edits the rows, and ProseMirror is not the one editing them.
+ *
+ * An atom's DOM is rebuilt whenever the node changes, which would take the
+ * caret with it on every keystroke — so the panel keeps its own rows, reads an
+ * edit back off them, and dispatches the new `value` itself. `update` leaves
+ * the DOM alone exactly while the rows already say what the node says; anything
+ * else (undo, a tab switch, `setContent`) disagrees with them and rebuilds,
+ * which is what keeps the block from drifting away from the file.
+ *
+ * `$view` and not a `view` on the schema: ProseMirror takes node views through
+ * the editor view's `nodeViews` prop, and a spec field of that name is simply
+ * never read — which is why this has to be registered on the editor below like
+ * any other plugin.
+ *
+ * `frontMatterSchema.node` rather than `frontMatterSchema`: the array
+ * `$nodeSchema` hands back copies `.id` off the `$Node` at the moment it is
+ * built, and the `$Node` does not know its own id until its plugin runs — so
+ * `$view` keyed on the array would file the node view under `undefined` and
+ * ProseMirror, looking up `nodeViews[node.type.name]`, would never find it.
+ *
+ * `stopEvent` is the other half of the bargain, and it is what makes the caret
+ * survive a keystroke. A row is a nested editing host, so while the reader is
+ * in one the browser's `activeElement` is the row rather than the editor's own
+ * DOM — `view.hasFocus()` is false, `editorOwnsSelection` says no, and
+ * ProseMirror never writes the selection back over the caret it does not own.
+ * The same walk is what `stopEvent` answers: without it the preset's own
+ * bindings would still fire, and Backspace in a row would join the block into
+ * the paragraph above instead of deleting a character.
+ */
+const frontMatterView = $view(frontMatterSchema.node, () => (node, view, getPos) => {
+  let current = node;
+  const panel = editableFrontMatterRows(String(node.attrs.value ?? ""));
+  const shown = (): string =>
+    Array.from(panel.querySelectorAll("[data-line]"))
+      .map((row) => row.textContent ?? "")
+      .join("\n");
+
+  const onInput = (): void => {
+    const value = shown();
+    if (value === String(current.attrs.value ?? "")) return;
+    const pos = getPos();
+    if (typeof pos !== "number") return;
+    view.dispatch(view.state.tr.setNodeMarkup(pos, undefined, { ...current.attrs, value }));
+  };
+  panel.addEventListener("input", onInput);
+
+  /**
+   * Enter opens a line inside the row it was pressed in.
+   *
+   * The browser's own Enter would split the row into a second `div` beside the
+   * first — a sibling with no `data-line` on it, which `shown` above would not
+   * read back and the next save would therefore drop in silence. A newline
+   * *inside* the row is the same line break to the reader (`white-space` comes
+   * down from the panel as `pre-wrap`), it reads back as one, and it costs the
+   * rest of the editing nothing: Backspace on a blank line is then just
+   * deleting a character, and so is Delete at the end of one.
+   */
+  const onKeyDown = (event: KeyboardEvent): void => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    const selection = panel.ownerDocument.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+    const range = selection.getRangeAt(0);
+    const lineBreak = panel.ownerDocument.createTextNode("\n");
+    range.deleteContents();
+    range.insertNode(lineBreak);
+    range.setStartAfter(lineBreak);
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    // Cancelling the default cancels the `input` event with it, so this edit
+    // has to be reported by hand — the same call every other edit arrives by.
+    onInput();
+  };
+  panel.addEventListener("keydown", onKeyDown);
+
+  return {
+    dom: panel,
+    update: (updated) => {
+      if (updated.type !== current.type) return false;
+      current = updated;
+      const value = String(updated.attrs.value ?? "");
+      if (shown() !== value) {
+        panel.replaceChildren(...Array.from(editableFrontMatterRows(value).childNodes));
+      }
+      return true;
+    },
+    // The editor's `eventBelongsToView` walks up from the event target and
+    // stops at the first node view that claims it, so everything the reader
+    // does inside the panel is theirs and not ProseMirror's.
+    stopEvent: () => true,
+    // Every mutation in here is the reader typing or the rebuild above.
+    ignoreMutation: () => true,
+    destroy: () => {
+      panel.removeEventListener("input", onInput);
+      panel.removeEventListener("keydown", onKeyDown);
+    },
+  };
+});
 
 /**
  * The commonmark preset's code block, replaced rather than extended.
@@ -827,6 +949,7 @@ export async function createWysiwygEditor(
     .use(mathSchema)
     .use(inlineMathSchema)
     .use(frontMatterSchema)
+    .use(frontMatterView)
     .use(gfmWithoutSingleTildeStrikes)
     .use(history)
     .use(

@@ -11,7 +11,7 @@
  * The remark half of the same feature is `tests/roundtrip.test.ts`.
  */
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MarkdownEditorHandle } from "../src/editor/handle";
 import { createWysiwygEditor } from "../src/editor/wysiwyg";
 
@@ -76,6 +76,88 @@ describe("front matter in the WYSIWYG surface", () => {
 
   it("writes the source back unchanged", async () => {
     const { handle } = await mount(DOC);
+
+    expect(handle.getContent()).toBe(DOC);
+  });
+
+  it("lets the reader edit a line where it stands", async () => {
+    const { host, handle } = await mount(DOC);
+
+    const row = host.querySelector("[data-newmd-frontmatter] [data-line]");
+    if (!(row instanceof HTMLElement)) throw new Error("no front matter row");
+
+    // A row the reader cannot put a caret into is a picture of metadata, not
+    // metadata they can fix — so the edit below is only meaningful if this
+    // holds. It is also what tells the schema's plain `toDOM` rows (which a
+    // copy or an export walks) apart from the node view's rows.
+    expect(row.getAttribute("contenteditable")).toBe("true");
+
+    row.textContent = "title: My Renamed Doc";
+    row.dispatchEvent(new Event("input", { bubbles: true }));
+
+    await vi.waitFor(() => {
+      expect(handle.getContent()).toContain("title: My Renamed Doc");
+    });
+    // The reader typed one line. Every other line has to come back as it was —
+    // a comment, an indented list item, the description, the body — because an
+    // edit that also rewrites its neighbours is a save the reader never asked
+    // for. This is the same promise `front-matter.md` makes on the corpus side.
+    expect(handle.getContent().startsWith("---\ntitle: My Renamed Doc\n")).toBe(true);
+    expect(handle.getContent()).toContain("  - notes");
+    expect(handle.getContent()).toContain("# a comment survives");
+    expect(handle.getContent()).toContain("Body text after the metadata.");
+
+    // And the block is still standing: the row the reader is typing into has to
+    // survive the edit it caused. Rebuilt from the new value it would look
+    // right in a snapshot and drop the caret on every keystroke.
+    expect(host.querySelector("[data-newmd-frontmatter] [data-line]")).toBe(row);
+  });
+
+  it("takes Enter as a new line of metadata", async () => {
+    const { host, handle } = await mount(DOC);
+
+    const row = host.querySelector("[data-newmd-frontmatter] [data-line]");
+    if (!(row instanceof HTMLElement)) throw new Error("no front matter row");
+
+    // The caret at the end of `title: My Doc`, which is where a reader who
+    // wants another key underneath it would be.
+    const range = document.createRange();
+    range.selectNodeContents(row);
+    range.collapse(false);
+    const selection = window.getSelection();
+    if (!selection) throw new Error("no selection to place");
+    selection.removeAllRanges();
+    selection.addRange(range);
+
+    row.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
+    );
+
+    await vi.waitFor(() => {
+      expect(handle.getContent().startsWith("---\ntitle: My Doc\n\ntags:\n")).toBe(true);
+    });
+    // The line the reader just opened has to be one of the rows. Left to the
+    // browser it would be a second `div` beside the first, carrying no
+    // `data-line` — and a line the rows do not hold is a line the next save
+    // drops without saying so.
+    expect(row.textContent).toBe("title: My Doc\n");
+    expect(handle.getContent()).toContain("  - notes");
+    expect(handle.getContent()).toContain("# a comment survives");
+  });
+
+  it("lets a keystroke in a row be the row's own", async () => {
+    const { host, handle } = await mount(DOC);
+
+    const row = host.querySelector("[data-newmd-frontmatter] [data-line]");
+    if (!(row instanceof HTMLElement)) throw new Error("no front matter row");
+
+    // Backspace is the preset's own binding — it joins a block into the one
+    // above. A reader deleting a character inside a line of metadata means the
+    // character, so the event has to stop at the panel rather than reach the
+    // editor behind it.
+    row.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Backspace", bubbles: true, cancelable: true }),
+    );
 
     expect(handle.getContent()).toBe(DOC);
   });
