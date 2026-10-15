@@ -112,3 +112,60 @@ export function pathBaseName(path: string): string | null {
   const dot = name.lastIndexOf(".");
   return dot > 0 ? name.slice(0, dot) : name;
 }
+
+/**
+ * A path reduced to the two things a comparison needs: which root it is on, and
+ * its segments.
+ *
+ * The root is folded to a comparable key — the drive letter lowercased, UNC
+ * separators forward-slashed, a bare `\` and a bare `/` both read as the one
+ * root they are. Segments are left exactly as they were written, because those
+ * are the names on disk and case matters to them (see `pathRelative`).
+ */
+function segmentsOf(path: string): { root: string; parts: string[] } {
+  const { prefix, rest } = splitPrefix(normalize(path, "/"));
+  const root = prefix.startsWith("\\\\")
+    ? prefix.replace(/\\/g, "/").toLowerCase()
+    : /^[a-zA-Z]:[\\/]$/.test(prefix)
+      ? `${prefix[0]!.toLowerCase()}:/`
+      : prefix.replace(/\\/g, "/");
+  return { root, parts: rest.split(SEPARATORS).filter((segment) => segment !== "") };
+}
+
+/**
+ * The path to write for `to` when read from the directory `fromDir`.
+ *
+ * The output is a Markdown destination, so it obeys the spelling the image flow
+ * already fixed (ADR-0003 §2.6): forward slashes whatever the inputs used, and
+ * a leading `./` when the target is at or below the directory. A document
+ * written on Windows has to resolve on Linux, and `.\a.png` does not.
+ *
+ * **Segments are compared case-sensitively, deliberately.** Comparing them
+ * loosely would let `C:\Notes` and `C:\notes` look like one directory, and the
+ * answer would then be spelled with whichever of the two names came second —
+ * a link that resolves on Windows and breaks on Linux. Walking up instead uses
+ * the target's own spelling, which is right on both.
+ *
+ * With no relative path to give — the two paths are on different drives, where
+ * no `..` reaches — this returns `to` unchanged rather than inventing one. The
+ * caller can tell, and must: an absolute destination is not something to write
+ * into Markdown (ADR-0003 §2.5), so that answer is a "skip this one".
+ */
+export function pathRelative(fromDir: string, to: string): string {
+  const from = segmentsOf(fromDir);
+  const target = segmentsOf(to);
+  if (from.root !== target.root) return to;
+
+  let common = 0;
+  while (
+    common < from.parts.length &&
+    common < target.parts.length &&
+    from.parts[common] === target.parts[common]
+  ) {
+    common += 1;
+  }
+
+  const ups = from.parts.length - common;
+  const tail = target.parts.slice(common).join("/");
+  return `${ups === 0 ? "./" : "../".repeat(ups)}${tail}`;
+}

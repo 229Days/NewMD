@@ -18,4 +18,5 @@ export {
   pathFileName,
   pathJoin,
   pathParent,
+  pathRelative,
 } from "./path";

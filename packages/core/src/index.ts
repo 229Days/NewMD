@@ -14,6 +14,7 @@ export {
   pathFileName,
   pathJoin,
   pathParent,
+  pathRelative,
 } from "./platform/path";
 
 // i18n — 中文优先 (ADR-0001 §2.11).
