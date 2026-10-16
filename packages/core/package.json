@@ -7,7 +7,8 @@
     ".": "./src/index.ts",
     "./platform": "./src/platform/index.ts",
     "./stores": "./src/stores/index.ts",
-    "./editor": "./src/editor/index.ts"
+    "./editor": "./src/editor/index.ts",
+    "./document": "./src/document/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

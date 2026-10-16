@@ -1,0 +1,23 @@
+{
+  "name": "@newmd/export",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@newmd/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "jsdom": "^30.1.1",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

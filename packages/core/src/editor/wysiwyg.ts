@@ -58,6 +58,9 @@ import remarkGfm from "remark-gfm";
 import remarkFrontmatter from "remark-frontmatter";
 import remarkMath from "remark-math";
 import type { Plugin as RemarkPlugin } from "unified";
+// The front matter rows, built beside the export's copy of them rather than in
+// this file — the block has to read the same in both (ADR-0005 §2.4).
+import { frontMatterRows } from "../document/frontmatter";
 import type {
   FindMatch,
   FindRequest,
@@ -222,62 +225,12 @@ const definitionSchema = $nodeSchema("definition", () => ({
 /**
  * YAML front matter — `---` fenced metadata at the very top of the file.
  *
- * mdast hands this over as one string: the lines between the fences with the
- * fences stripped, and the same string is what goes back out. So the panel
- * below only ever *reads* it. Round-tripping the metadata through a YAML
- * parser and back would be lossy in ways the reader meets on their next save —
- * comments dropped, keys reordered, quoting normalised — and every one of
- * those would have to be declared as an accepted rewrite in the corpus.
- *
- * Which is why the write path (ADR-0001 §2.5 可视化编辑) is a *view* and not a
- * parser: the rows split a line into a key and a value so a stylesheet can tell
- * them apart, the reader types into a row, and what goes back into `value` is
- * the rows joined by newlines — the same split `toDOM` makes and `parseDOM`
- * undoes. Nothing here is ever understood as YAML, so nothing can be rewritten
- * by being understood.
+ * The rows themselves are built in `document/frontmatter.ts`, which the export
+ * reads too: the block has to read as metadata on screen and in the page the
+ * export writes, and the same renderer is the only way that stays true. What is
+ * here is the engine's half — the schema below, and the node view that lets the
+ * reader type into a row.
  */
-const FRONT_MATTER_FIELD = /^([\w.-]+):(?:[ \t]+(.*))?$/;
-
-/** One `div[data-line]` per source line, key and value split out for styling. */
-function frontMatterRows(value: string): HTMLDivElement {
-  const panel = document.createElement("div");
-  panel.setAttribute("data-newmd-frontmatter", "");
-  for (const line of value.split("\n")) {
-    const row = document.createElement("div");
-    row.setAttribute("data-line", "");
-    const field = FRONT_MATTER_FIELD.exec(line);
-    if (field === null) {
-      // An indented list item, a comment, a continuation line: shown as it
-      // was typed. This reads lines, it does not parse YAML, so a shape it
-      // does not recognise shows one row rather than losing the text.
-      row.textContent = line;
-    } else {
-      const key = field[1] ?? "";
-      const rawValue = field[2];
-      const keyPart = document.createElement("span");
-      keyPart.setAttribute("data-key", "");
-      keyPart.textContent = key;
-      row.append(keyPart);
-      if (rawValue === undefined) {
-        // A key with nothing after the colon (`tags:`) — the rest of the
-        // line is separator, not value.
-        row.append(line.slice(key.length));
-      } else {
-        // The colon and whatever spacing the source used between it and the
-        // value. Taken by length rather than re-derived, so the row reads
-        // back as the exact line it was split out of.
-        const gap = line.length - key.length - rawValue.length;
-        row.append(line.slice(key.length, key.length + gap));
-        const valuePart = document.createElement("span");
-        valuePart.setAttribute("data-value", "");
-        valuePart.textContent = rawValue;
-        row.append(valuePart);
-      }
-    }
-    panel.append(row);
-  }
-  return panel;
-}
 
 /** The same rows, with each one accepting the caret. */
 function editableFrontMatterRows(value: string): HTMLDivElement {

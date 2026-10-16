@@ -1,0 +1,32 @@
+/*
+ * The page the exported document sits in (ADR-0005 §2.6).
+ *
+ * The one stylesheet the export owns rather than borrows. It is here because of
+ * who the other three belong to: `theme.css` carries values, `document.css` is
+ * scoped to `[data-newmd-document]` and says so in its own header, and `body`
+ * belongs to the app's chrome, which lives in `packages/ui` — a package this one
+ * must not depend on (ADR-0005 §2.5).
+ *
+ * So without these rules an exported page has no ground of its own, and the
+ * browser paints its default white behind them. In the light theme that is
+ * invisible; in the dark one the document is `--fg: #e6edf3` on white, which is
+ * to say unreadable in exactly the theme its author chose.
+ *
+ * Kept to what a page needs and a document does not: no measure, no type scale,
+ * no print rules. `@page` belongs to the PDF backend (ADR-0005 §2.9) and lands
+ * here when that slice does.
+ */
+
+/* The canvas is painted by the root element; `body` below paints the box. */
+html {
+  background: var(--bg);
+}
+
+body {
+  /* The browser's own 8px, which `document.css` does not know about — its
+     padding is the document's gutter, not the page's. */
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-ui);
+}

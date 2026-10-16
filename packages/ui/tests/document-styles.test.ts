@@ -33,6 +33,19 @@ describe("@newmd/ui's stylesheet", () => {
     expect(css).toMatch(/@import\s+"\.\.\/\.\.\/core\/src\/document\.css"/);
   });
 
+  it("imports the palette core owns, and keeps only the chrome's own look", async () => {
+    // The palette moved for the export's sake (ADR-0005 §2.6): an exported page
+    // is dressed by the same tokens the app is, and `packages/export` cannot
+    // reach this package. What is asserted here is that the app did not keep a
+    // second copy — a copy would win here and lose there, and the export is
+    // where nobody would be looking.
+    const css = await readFile("src/styles.css", "utf8");
+
+    expect(css).toMatch(/@import\s+"\.\.\/\.\.\/core\/src\/theme\.css"/);
+    const redeclared = ["--bg:", "--fg:", "--accent:"].filter((token) => css.includes(token));
+    expect(redeclared).toEqual([]);
+  });
+
   it("no longer declares the blocks that moved to core", async () => {
     const css = await readFile("src/styles.css", "utf8");
 

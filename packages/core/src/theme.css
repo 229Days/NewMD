@@ -1,0 +1,98 @@
+/*
+ * The theme's values (ADR-0001 §2.11, ADR-0005 §2.6).
+ *
+ * Every colour the app paints resolves through a custom property, and this is
+ * where they are written down. Switching theme only rewrites `[data-theme]`,
+ * and user-supplied CSS can override any of these to restyle the whole app
+ * without touching a component.
+ *
+ * **Why this is in core rather than in `packages/ui`, where it grew up.** An
+ * exported page is dressed by the same tokens the editor is, and it carries
+ * them inlined — so whoever writes that page has to be able to read them. The
+ * export depends on `@newmd/core` and must not depend on `@newmd/ui`: that is a
+ * React component library, and a static file's build reaching through it for a
+ * hex code is an edge pointing the wrong way up the graph (ADR-0005 §2.5).
+ *
+ * What stays in `packages/ui` is the app's own chrome — the parts of the
+ * stylesheet that name a shell, a panel or a dialog and mean nothing to a
+ * document. The split is the same one `document.css` is on: values here, the
+ * document's look beside it there, the window's look in the UI.
+ *
+ * `theme-tokens.test.ts` holds this file against `document.css`: every token
+ * that stylesheet reads has to be defined here, and defined in both themes.
+ */
+
+:root {
+  color-scheme: light;
+
+  --bg: #ffffff;
+  --bg-elevated: #f6f8fa;
+  --bg-hover: #eef1f4;
+  --bg-active-line: rgba(31, 35, 40, 0.035);
+
+  --fg: #1f2328;
+  --fg-muted: #59636e;
+  --fg-subtle: #818b98;
+
+  --border: #d1d9e0;
+  --border-subtle: #e6e9ed;
+
+  --accent: #0969da;
+  --accent-hover: #0757b8;
+  --accent-fg: #ffffff;
+  --danger: #cf222e;
+  --danger-hover: #a40e26;
+  --success: #1a7f37;
+
+  --selection: rgba(9, 105, 218, 0.18);
+  --search-match: rgba(255, 213, 0, 0.32);
+  --search-match-border: rgba(160, 120, 0, 0.45);
+  --search-match-active: rgba(255, 150, 50, 0.42);
+
+  --shadow-sm: 0 1px 2px rgba(31, 35, 40, 0.08);
+  --shadow: 0 1px 3px rgba(31, 35, 40, 0.1), 0 8px 24px rgba(31, 35, 40, 0.08);
+
+  --radius-sm: 4px;
+  --radius: 8px;
+  --radius-lg: 12px;
+
+  --font-ui: "Segoe UI", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+  --font-editor: "Segoe UI", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+  --font-mono: "Cascadia Code", "JetBrains Mono", Consolas, "Courier New", monospace;
+
+  /* Driven from user settings at runtime. */
+  --editor-font-size: 16px;
+  --editor-line-height: 1.75;
+  --editor-max-width: 820px;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #0d1117;
+  --bg-elevated: #151b23;
+  --bg-hover: #1c2229;
+  --bg-active-line: rgba(230, 237, 243, 0.045);
+
+  --fg: #e6edf3;
+  --fg-muted: #9198a1;
+  --fg-subtle: #6e7681;
+
+  --border: #30363d;
+  --border-subtle: #21262d;
+
+  --accent: #4493f8;
+  --accent-hover: #6cb0ff;
+  --accent-fg: #041225;
+  --danger: #f85149;
+  --danger-hover: #ff7b72;
+  --success: #3fb950;
+
+  --selection: rgba(68, 147, 248, 0.28);
+  --search-match: rgba(187, 128, 9, 0.42);
+  --search-match-border: rgba(210, 150, 20, 0.55);
+  --search-match-active: rgba(210, 120, 20, 0.52);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.45), 0 8px 24px rgba(0, 0, 0, 0.35);
+}

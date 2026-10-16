@@ -30,8 +30,14 @@ export type { HeadingTarget } from "./editor/handle";
  * heading either — the WYSIWYG engine reads `textContent` and would say the
  * same. A leaf that adds a character here and not there is a heading the three
  * readers would resolve to different places.
+ *
+ * Exported because the export's `[TOC]` needs the same flattening: an entry that
+ * read `**Notes**` where the heading above it read `Notes` would be a table of
+ * contents describing a document nobody is looking at. A second walker would
+ * agree with this one until the first new inline node type, and the disagreement
+ * would show up in a table of contents rather than in an error.
  */
-function plainText(node: Nodes): string {
+export function nodeText(node: Nodes): string {
   switch (node.type) {
     case "text":
     case "inlineCode":
@@ -43,7 +49,7 @@ function plainText(node: Nodes): string {
     case "footnoteReference":
       return "";
     default:
-      return "children" in node ? node.children.map(plainText).join("") : "";
+      return "children" in node ? node.children.map(nodeText).join("") : "";
   }
 }
 
@@ -78,7 +84,7 @@ export function headingsOf(markdown: string): LocatedHeading[] {
   collect(parse(markdown), found);
   return found.map((heading) => ({
     level: heading.depth,
-    text: plainText(heading),
+    text: nodeText(heading),
     line: heading.position?.start.line ?? 0,
   }));
 }
