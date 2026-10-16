@@ -389,7 +389,7 @@ import 过 `@codemirror/*`。理由是 `MarkdownEditorHandle` 故意比两个引
   引擎形状的。所以 M6 要给 core 开一个窄 subpath。
 - **仓里没有任何正文排版样式**：`--editor-font-size` / `--editor-line-height` / `--font-editor` /
   `--editor-max-width` 四个设置项**只有 CodeMirror 在用**（`codemirror.ts:66-77`），WYSIWYG 一个都没接。
-  「屏幕上什么样导出就什么样」此前**无内容可依**。
+  「屏幕上什么样导出就什么样」此前**无内容可依**。**切片 ① 已补上（§3.11）。**
 - **ADR §2.7 里 DOCX 那一行的输入与另外三行不同**（说的是 ProseMirror 节点映射，而 ProseMirror doc 只
   在活着的 WYSIWYG 里存在）—— 已统一成 mdast。
 - **实测数字**：KaTeX 字体目录 1.2MB 里三份格式重复，**woff2 子集只有 20 个文件 296KB**；
@@ -444,6 +444,49 @@ import 过 `@codemirror/*`。理由是 `MarkdownEditorHandle` 故意比两个引
 - **只存在于 CSS 级联里的半边**（`var()`）：jsdom 不解析自定义属性，写不出行为测试。
   退而求其次断言**文件内容**（规则存在），并在注释里讲清为什么只能做到这一步 ——
   比假装它被覆盖了强。
+
+### 3.11 M6 第 ① 片：正文样式表 `core/src/document.css`
+
+**做什么**：新建 `packages/core/src/document.css`，一份**只管文档、不管窗口**的样式表。它挂在一个属性
+上 —— **`[data-newmd-document]`** —— WYSIWYG 引擎把它设在自己的可编辑元素上（不是外壳给的宿主）。
+里面两半：
+
+1. **新写的正文排版**：`--editor-font-size` / `--editor-line-height` / `--font-editor` /
+   `--editor-max-width` 四个设置项终于接到 WYSIWYG 上，加上 h1–h6 / p / ul / ol / li / 引用 / 表格 /
+   分割线 / 行内代码 / 围栏块 / 链接 / 图片的规则。字号与缩进一律用 `em`，所以调大字体是整个页面一起
+   变大，不是只有段落。
+2. **从 `ui/src/styles.css` 搬过来的那一半**：front matter / mermaid / `[TOC]` 三个块的**阅读向**
+   规则，原件已删。`ui/src/styles.css` 用 `@import "../../core/src/document.css"` 取回给编辑器用。
+
+**三条要记住的形状**：
+
+- **这一份里不出现 `height: 100%` / `overflow` / `vh`。** 它要给两种东西用：一块视口（编辑器）和
+  一页纸（导出的 HTML），而这两者对高度与滚动的答案正好相反。滚动归外壳。
+- **导出侧包正文的那个元素必须带 `[data-newmd-document]`**，否则内联进去的规则一条都不生效。
+- **它自带 reset**（`box-sizing: border-box` 那一组）：导出物里没有 Tailwind preflight，它不能依赖
+  任何别的东西。
+
+**顺带撞出来的一个 bug（不是计划内的）**：WYSIWYG **根本没有滚动容器**。`body` 是 `overflow: hidden`、
+外壳也是，CodeMirror 自带 `.cm-scroller`、Milkdown 一个都不带 —— 比窗口高的文档在 WYSIWYG 下够不到
+后半段（源码模式没事）。修法是把滚动放在外壳：`EditorPane` 的宿主 div 加 `overflow-y-auto`。
+**没在真浏览器里量过**，进手测清单。
+
+**记下来但没做**：GFM 任务列表在 WYSIWYG 里**没有勾选框**（preset 只有 `checked` 属性、没有 view）。
+CSS 能画一个，但那会是一个点不动的框，与 ADR-0004 §2.5 同一条理由没画。见 ADR-0005 §3 与 §5 第 6 条。
+
+**测试**：core `tests/document-styles.test.ts`（7 条）+ ui `tests/document-styles.test.ts`（2 条）。
+jsdom 不跑层叠，所以这一片的可测部分是这样切的：
+
+- **能行为断言的是「规则圈住了该圈的 DOM」** —— 挂一个含全部块类型的文档，断言 `[data-newmd-document]`
+  就是那个 `contenteditable`，且它底下真能找到 h1–h6 / table / img / 三个搬过来的块。这一条比文件断言
+  值钱：作用域挂错位置时，屏幕上是一条规则都不生效、而且**不报错**。
+- **只能断言文件内容的是「规则存在」** —— 照抄 `highlight.test.ts` / `toc-block.test.ts` 的先例。
+- ui 那两条钉的是「谁拥有这些规则」：`@import` 在不在（掉了编辑器就没样式，且没有测试会红）、
+  搬走的四组选择器有没有留在 ui（留着就会两边慢慢分叉，而 ui 那份是编辑器看得见的）。
+
+**验过 `@import` 真能穿过去**：Tailwind v4 + Vite 处理 CSS `@import` 是这一片唯一的机械风险（core 的
+CSS 文件在另一个包里）。`pnpm build` 之后在 `apps/desktop/dist/assets/index-*.css` 里数到 54 处
+`data-newmd-document`，搬过来的三块也都在 —— 不是推断，是数出来的。
 
 ---
 
@@ -518,7 +561,7 @@ import 过 `@codemirror/*`。理由是 `MarkdownEditorHandle` 故意比两个引
 
 ---
 
-## 6. M6「导出与体验」（**ADR-0005 已定案，代码一行没写**）
+## 6. M6「导出与体验」（**ADR-0005 已定案；① 已合入，② 起一行没写**）
 
 > 设计全文：`docs/adr/0005-export-and-experience.md`。**动手前读它，别读这一节。**
 > 交付物 = HTML / PDF / DOCX / Markdown 四种导出、专注模式、打字机模式、拼写检查**开关**、打包安装
@@ -527,17 +570,17 @@ import 过 `@codemirror/*`。理由是 `MarkdownEditorHandle` 故意比两个引
 
 **切片的次序**（ADR-0005 §2.15）：
 
-| #   | 切片                                                                     | 为什么在这个位置                                     |
-| --- | ------------------------------------------------------------------------ | ---------------------------------------------------- |
-| ①   | 正文样式表（`core/src/document.css` + ui 接上 + 搬 front matter 那几段） | 同时是 HTML 导出的输入与专注模式的前提               |
-| ②   | `packages/export` 起壳 + `@newmd/core/document` + MD→HTML 序列化器       | 定形状：渲染器怎么复用、CSS 怎么内联、图片怎么内联   |
-| ③   | HTML 导出的通路（工具栏「导出」下拉 + 保存对话框 + 写盘）                | 让 ② 变成读者能按到的东西，也是 ④ 的基座             |
-| ④   | PDF（隐藏 iframe + 系统打印）                                            | 撞 ADR-0001 §5 唯一那条「中」风险，也是两条验收之一  |
-| ⑤   | Markdown + zip                                                           | 独立于 HTML 序列化器，最便宜的一条后端               |
-| ⑥   | DOCX                                                                     | 最大的一块，已知取舍                                 |
-| ⑦   | 专注模式 / 打字机模式                                                    | 与导出无关，唯一可以自由挪的两片                     |
-| ⑧   | 拼写检查开关                                                             | 一片，接上现成的通路（`setSpellcheck` 今天零调用方） |
-| ⑨   | 打包安装                                                                 | 收口（`pnpm tauri build` 从来没跑过）                |
+| #   | 切片                                                                        | 为什么在这个位置                                     |
+| --- | --------------------------------------------------------------------------- | ---------------------------------------------------- |
+| ①   | ✅ 正文样式表（`core/src/document.css` + ui 接上 + 搬 front matter 那几段） | 同时是 HTML 导出的输入与专注模式的前提（§3.11）      |
+| ②   | `packages/export` 起壳 + `@newmd/core/document` + MD→HTML 序列化器          | 定形状：渲染器怎么复用、CSS 怎么内联、图片怎么内联   |
+| ③   | HTML 导出的通路（工具栏「导出」下拉 + 保存对话框 + 写盘）                   | 让 ② 变成读者能按到的东西，也是 ④ 的基座             |
+| ④   | PDF（隐藏 iframe + 系统打印）                                               | 撞 ADR-0001 §5 唯一那条「中」风险，也是两条验收之一  |
+| ⑤   | Markdown + zip                                                              | 独立于 HTML 序列化器，最便宜的一条后端               |
+| ⑥   | DOCX                                                                        | 最大的一块，已知取舍                                 |
+| ⑦   | 专注模式 / 打字机模式                                                       | 与导出无关，唯一可以自由挪的两片                     |
+| ⑧   | 拼写检查开关                                                                | 一片，接上现成的通路（`setSpellcheck` 今天零调用方） |
+| ⑨   | 打包安装                                                                    | 收口（`pnpm tauri build` 从来没跑过）                |
 
 **形状一句话**：四条后端**共用一棵 mdast** —— 输入统一是 `getContent()` 那串 Markdown，导出侧自己
 parse（复用 core 已定的 remark 链）。HTML 是自包含单文件（CSS 内联、图片 base64、公式按需带 KaTeX
@@ -547,6 +590,7 @@ Markdown 是原文 + 图片打 zip。
 **必须记住的四件事**：
 
 1. **`packages/export` 今天不存在**，一行都没有；`docx` 与任何 zip 库也都不在依赖树里（两个新依赖）。
+   ② 号切片要的内联 CSS 已经有了：`packages/core/src/document.css`，`?inline` 取它（§3.11）。
 2. **core 的 barrel 故意够不到 remark 链** —— 要开 `@newmd/core/document` 这个窄 subpath，并配一条
    测试钉住「它只导出文档侧，不导出引擎」，否则它会慢慢长成第二个 `editor/`。
 3. **导出 HTML 要复用 §3.5 那套 Shiki**：`highlight(code, lang)` 返回的 `{ offset, text, style }[]` 与
@@ -632,7 +676,8 @@ the fence` 报 `expected 0 to be greater than 0`，而单跑这个文件 386ms �
    - 状态栏在 WYSIWYG 里报的是**文档文本**的行列，不是源码行列（`changeWatcher` 注释写明了理由）。
 4. **不要动 locale JSON 的结构**（两套 key 必须同构、按字母序），也不要在源码里塞裸文案。
 5. **不要在这三类未选工作里顺手推进**：E2E/Playwright、§5.2 小修、§5.3 文档合规 ——
-   除非用户明确改主意。**§4 的 7 项功能缺口已经全部收口，M6 也已经规划完（ADR-0005）**，
-   所以下一件该做的是 **M6 的 ① 号切片：补 `packages/core/src/document.css` 那正文样式**（§6 的表），
-   不是补 WYSIWYG 多光标（ADR-0004 明确不做），也不是回头去动 §3.8 那三个 Alt 手势。
+   除非用户明确改主意。**§4 的 7 项功能缺口已经全部收口，M6 的 ① 号切片也已合入（§3.11）**，
+   所以下一件该做的是 **M6 的 ② 号切片：`packages/export` 起壳 + `@newmd/core/document` 窄 subpath
+   - MD→HTML 单文件序列化器**（§6 的表），不是补 WYSIWYG 多光标（ADR-0004 明确不做），
+     也不是回头去动 §3.8 那三个 Alt 手势。
 6. **不要把本机绝对路径写进任何仓库文件**（public 仓库）。

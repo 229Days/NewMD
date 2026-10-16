@@ -1476,6 +1476,12 @@ export async function createWysiwygEditor(
   // rebuild and never something a caller has to find in the DOM.
   editor.ctx.get(editorViewCtx).dom.spellcheck = options.spellcheck !== false;
 
+  // What `document.css` is scoped to (ADR-0005 §2.5). On the editable rather
+  // than on `options.parent`, which Milkdown puts a container of its own
+  // between: a namespace two levels above the document would be a namespace
+  // that also covers whatever the app decides to render beside it.
+  editor.ctx.get(editorViewCtx).dom.setAttribute("data-newmd-document", "");
+
   return {
     setContent(text) {
       // No early return on equal text. Two documents can hold the same bytes —

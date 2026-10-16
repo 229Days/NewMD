@@ -1,6 +1,16 @@
 @import "tailwindcss";
 
 /*
+ * The document stylesheet lives in core, not here (ADR-0005 §2.5).
+ *
+ * The body's type and the front matter / mermaid / `[TOC]` blocks moved out:
+ * they dress *document content*, and the HTML export has to inline them, so
+ * they belong to the one package the editor and the export both depend on.
+ * What stays in this file is the app's own chrome — shell, panels, dialogs.
+ */
+@import "../../core/src/document.css";
+
+/*
  * Tailwind v4 auto-detects sources from the Vite project root, which is
  * `apps/desktop` — it never reaches the workspace packages where the actual
  * component markup lives. Declare them explicitly.
@@ -132,128 +142,4 @@ body {
 
 .toast-enter {
   animation: toast-in 160ms ease-out;
-}
-
-/*
- * YAML front matter (ADR-0001 §2.4).
- *
- * The engine renders this block from the reader's own source, so the panel
- * only has to look like metadata rather than like body text: an inset box in
- * the mono face, keys slightly firmer than values. Rows are block elements,
- * which is what keeps the source's own line breaks, and `pre-wrap` is what
- * keeps an indented list item indented.
- */
-[data-newmd-frontmatter] {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius);
-  padding: 10px 14px;
-  margin-block: 1.25em;
-  color: var(--fg-muted);
-  font-family: var(--font-mono);
-  font-size: 0.9em;
-  line-height: 1.7;
-  white-space: pre-wrap;
-}
-
-[data-newmd-frontmatter] [data-key] {
-  color: var(--fg);
-  font-weight: 600;
-}
-
-[data-newmd-frontmatter] [data-value] {
-  color: var(--fg);
-}
-
-/*
- * Mermaid (ADR-0001 §2.4).
- *
- * The drawing sits in front of the source, which stays in the document until
- * a diagram lands on top of it — and stays on screen if one never does. No
- * copy here on purpose: the engine's DOM carries no words either, so nothing
- * on this block has to be translated.
- */
-[data-newmd-mermaid] {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius);
-  padding: 12px;
-  margin-block: 1.25em;
-}
-
-[data-newmd-mermaid] [data-diagram] {
-  display: flex;
-  justify-content: center;
-  overflow-x: auto;
-}
-
-[data-newmd-mermaid] [data-diagram] svg {
-  max-width: 100%;
-  height: auto;
-}
-
-/* The source is a fallback, not a second reading of the block. */
-[data-newmd-mermaid][data-rendered="ok"] pre {
-  display: none;
-}
-
-/* A fence that would not draw: the source as it was, marked. */
-[data-newmd-mermaid][data-rendered="error"] {
-  border-color: var(--danger);
-}
-
-/*
- * The `[TOC]` block (ADR-0002 §2.8).
- *
- * What is here is the table of contents; which half of the block is on screen
- * is decided by `toc.css` in core, because that is the mechanism rather than a
- * look. The marker half is deliberately left alone — a reader who has clicked
- * into the block is looking at the file, and dressing the five characters up
- * would be claiming they are something else.
- *
- * The entries are buttons because Markdown headings have no id to link to
- * (ADR-0002 §2.6), so they are stripped back to read as lines of a list rather
- * than as controls. How deep an entry sits comes from core as
- * `--newmd-toc-indent`, a plain number: the document knows how deep its
- * headings go, the width of one step is a look and lives here.
- *
- * No copy on this block, on purpose — the engine's DOM carries no words either,
- * so nothing about a table of contents has to be translated.
- */
-[data-newmd-toc-list] ul {
-  list-style: none;
-  margin: 1.25em 0;
-  padding: 0;
-  border-left: 2px solid var(--border-subtle);
-}
-
-[data-newmd-toc-list] li {
-  margin: 0;
-}
-
-[data-newmd-toc-entry] {
-  display: block;
-  width: 100%;
-  padding: 3px 10px 3px calc(12px + var(--newmd-toc-indent, 0) * 1.1em);
-  border: 0;
-  background: none;
-  color: var(--fg-muted);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-[data-newmd-toc-entry]:hover {
-  color: var(--fg);
-  background: var(--bg-elevated);
-}
-
-/*
- * A document with no headings still has a block in it, and a zero-height one
- * would be a block the reader cannot click back into once the caret has left —
- * the state they are in while reading the entries. A short strip is what keeps
- * it reachable; there is no copy to put in it.
- */
-[data-newmd-toc-list] ul:empty {
-  min-height: 1.25em;
 }

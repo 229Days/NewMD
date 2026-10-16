@@ -190,7 +190,15 @@ export function EditorPane() {
 
   return (
     <div className="relative min-h-0 flex-1 bg-[var(--bg)]">
-      <div ref={hostRef} className="h-full w-full" />
+      {/*
+        The pane scrolls, not the document (ADR-0005 §2.5). Source mode brings
+        its own scroller (`.cm-scroller`), and WYSIWYG brings none: with
+        `overflow: hidden` on `body` and on the shell, a document taller than
+        the pane was clipped with nothing to reach the rest of it. Keeping the
+        scroller here rather than in `document.css` is what lets that stylesheet
+        be inlined into an exported page, where a scroll container is wrong.
+      */}
+      <div ref={hostRef} className="h-full w-full overflow-y-auto" />
       {/* Handed the ref rather than the surface: the bar only needs it when the
           reader presses something, and no re-render is worth a boot-time one. */}
       <FindReplace surfaceRef={handleRef} />

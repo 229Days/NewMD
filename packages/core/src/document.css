@@ -1,0 +1,377 @@
+/*
+ * The document stylesheet (ADR-0005 §2.5).
+ *
+ * Everything here is about the *document* rather than about the app: the
+ * measure, the type scale, and how the blocks a Markdown file can hold look.
+ * Two consumers take this one file — the editor, through `packages/ui`, and the
+ * HTML export, which inlines it. That is why it lives in core: core is the one
+ * package both depend on, and making the export reach into a React package for
+ * its stylesheet would be an edge pointing the wrong way up the graph.
+ *
+ * Two things follow from being inlined into a file that stands on its own:
+ *
+ * 1. It carries its own reset. There is no Tailwind preflight underneath the
+ *    export; `border-box` is stated here because every padded box below is
+ *    sized by it.
+ * 2. Nothing here may be about the app's window. No `height: 100%`, no
+ *    `overflow`, nothing in `vh`: the editor's pane scrolls and the exported
+ *    file is a page, so a rule that is right for one is wrong for the other.
+ *
+ * Everything is scoped to `[data-newmd-document]`, which the WYSIWYG engine
+ * puts on the editable itself and the export puts on the element it wraps the
+ * body in. Bare element selectors would leak: the app has paragraphs, lists and
+ * tables of its own.
+ */
+
+[data-newmd-document],
+[data-newmd-document] *,
+[data-newmd-document] *::before,
+[data-newmd-document] *::after {
+  box-sizing: border-box;
+}
+
+/*
+ * The page: the reader's measure, the reader's type, and the reader's settings.
+ *
+ * `margin-inline: auto` is what makes `--editor-max-width` a measure rather
+ * than a lid — with the pane scrolling (the editor) or the window (the export),
+ * a document narrower than its container sits in the middle of it.
+ */
+[data-newmd-document] {
+  max-width: var(--editor-max-width);
+  margin-inline: auto;
+  padding: 28px 32px;
+  font-family: var(--font-editor);
+  font-size: var(--editor-font-size);
+  line-height: var(--editor-line-height);
+  color: var(--fg);
+  /* A long URL or an unbroken token is the document's to wrap, not the pane's
+     to scroll sideways. */
+  overflow-wrap: break-word;
+}
+
+/* Nothing above the first block: a document should not open with a gap. */
+[data-newmd-document] > :first-child {
+  margin-top: 0;
+}
+
+/*
+ * Headings.
+ *
+ * Sized in `em` so that every step scales with `--editor-font-size` — a reader
+ * who turns the font up wants the whole page bigger, not only the paragraphs.
+ * The steps are GitHub's, like the palette the app is already built on.
+ */
+[data-newmd-document] h1,
+[data-newmd-document] h2,
+[data-newmd-document] h3,
+[data-newmd-document] h4,
+[data-newmd-document] h5,
+[data-newmd-document] h6 {
+  margin: 1.6em 0 0.6em;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+[data-newmd-document] h1,
+[data-newmd-document] h2 {
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+[data-newmd-document] h1 {
+  font-size: 2em;
+}
+
+[data-newmd-document] h2 {
+  font-size: 1.5em;
+}
+
+[data-newmd-document] h3 {
+  font-size: 1.25em;
+}
+
+[data-newmd-document] h4 {
+  font-size: 1em;
+}
+
+[data-newmd-document] h5 {
+  font-size: 0.875em;
+}
+
+[data-newmd-document] h6 {
+  font-size: 0.85em;
+  color: var(--fg-muted);
+}
+
+[data-newmd-document] p {
+  margin: 1em 0;
+}
+
+/*
+ * Lists.
+ *
+ * The indent is in `em` for the same reason the headings are: it steps with the
+ * font. `li > p` is not a paragraph in the reader's sense — it is how a loose
+ * list holds its items — so it does not get a paragraph's gap.
+ */
+[data-newmd-document] ul,
+[data-newmd-document] ol {
+  margin: 1em 0;
+  padding-inline-start: 1.8em;
+}
+
+[data-newmd-document] li {
+  margin: 0.25em 0;
+}
+
+[data-newmd-document] li > ul,
+[data-newmd-document] li > ol {
+  margin: 0.25em 0;
+}
+
+[data-newmd-document] li > p {
+  margin: 0.25em 0;
+}
+
+[data-newmd-document] li::marker {
+  color: var(--fg-muted);
+}
+
+/*
+ * GFM task list items arrive as `li[data-item-type="task"]`, and nothing draws
+ * their box — the preset carries the `checked` attribute but no view for it.
+ * Drawing one here would be a checkbox that no click can tick, and an
+ * affordance that looks live and is not is worse than a list item that reads as
+ * a list item. Recorded as an open gap instead.
+ */
+
+[data-newmd-document] blockquote {
+  margin: 1em 0;
+  padding: 0.2em 1em;
+  border-inline-start: 3px solid var(--border);
+  color: var(--fg-muted);
+}
+
+[data-newmd-document] blockquote > :first-child {
+  margin-top: 0;
+}
+
+[data-newmd-document] blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+/*
+ * Tables.
+ *
+ * Deliberately not the `display: block; overflow-x: auto` trick that lets a
+ * wide table scroll itself: a table is laid out by the engine, which measures
+ * its cells to place a caret in them, and turning the box inside out to save a
+ * scrollbar is not a trade this editor should make. Cells wrap instead.
+ */
+[data-newmd-document] table {
+  width: 100%;
+  margin: 1em 0;
+  border-collapse: collapse;
+}
+
+[data-newmd-document] th,
+[data-newmd-document] td {
+  padding: 6px 13px;
+  border: 1px solid var(--border);
+}
+
+[data-newmd-document] thead th {
+  background: var(--bg-elevated);
+  font-weight: 600;
+}
+
+[data-newmd-document] hr {
+  height: 1px;
+  margin: 1.6em 0;
+  border: 0;
+  background: var(--border-subtle);
+}
+
+/*
+ * Code.
+ *
+ * One rule for the inline span and one for the block, and the block resets what
+ * the span set: the fence's `<code>` is the same element, and a second inset box
+ * inside the first is what leaving that out looks like.
+ */
+[data-newmd-document] code {
+  padding: 0.15em 0.35em;
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+[data-newmd-document] pre {
+  margin: 1em 0;
+  padding: 12px 16px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  /* A wide line scrolls its own block: wrapping code is worse than scrolling
+     it. This is the one place a document may be wider than the measure. */
+  overflow-x: auto;
+  line-height: 1.6;
+}
+
+[data-newmd-document] pre code {
+  padding: 0;
+  border-radius: 0;
+  background: none;
+}
+
+[data-newmd-document] a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+/*
+ * `display: block` is what the app's preflight already does to every image, so
+ * stating it here keeps the export from laying them out inline instead.
+ */
+[data-newmd-document] img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+/*
+ * The three blocks below moved here from `packages/ui/src/styles.css`
+ * (ADR-0005 §2.5). What used to justify keeping them there —「样式住在应用外壳」
+ * — stopped holding once the HTML export needed them too: a `[TOC]` block or a
+ * diagram is *document content*, and it has to be dressed in the exported file
+ * exactly as it is on screen. The ownership rule is now three-way: the parts
+ * emit `data-newmd-*` from core, the reading-oriented looks live here, and the
+ * app's own chrome stays in ui (ADR-0002 §2.8 as revised).
+ */
+
+/*
+ * YAML front matter (ADR-0001 §2.4).
+ *
+ * The engine renders this block from the reader's own source, so the panel
+ * only has to look like metadata rather than like body text: an inset box in
+ * the mono face, keys slightly firmer than values. Rows are block elements,
+ * which is what keeps the source's own line breaks, and `pre-wrap` is what
+ * keeps an indented list item indented.
+ */
+[data-newmd-document] [data-newmd-frontmatter] {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  margin-block: 1.25em;
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+[data-newmd-document] [data-newmd-frontmatter] [data-key] {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+[data-newmd-document] [data-newmd-frontmatter] [data-value] {
+  color: var(--fg);
+}
+
+/*
+ * Mermaid (ADR-0001 §2.4).
+ *
+ * The drawing sits in front of the source, which stays in the document until
+ * a diagram lands on top of it — and stays on screen if one never does. No
+ * copy here on purpose: the engine's DOM carries no words either, so nothing
+ * on this block has to be translated.
+ */
+[data-newmd-document] [data-newmd-mermaid] {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  padding: 12px;
+  margin-block: 1.25em;
+}
+
+[data-newmd-document] [data-newmd-mermaid] [data-diagram] {
+  display: flex;
+  justify-content: center;
+  overflow-x: auto;
+}
+
+[data-newmd-document] [data-newmd-mermaid] [data-diagram] svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* The source is a fallback, not a second reading of the block. */
+[data-newmd-document] [data-newmd-mermaid][data-rendered="ok"] pre {
+  display: none;
+}
+
+/* A fence that would not draw: the source as it was, marked. */
+[data-newmd-document] [data-newmd-mermaid][data-rendered="error"] {
+  border-color: var(--danger);
+}
+
+/*
+ * The `[TOC]` block (ADR-0002 §2.8).
+ *
+ * What is here is the table of contents; which half of the block is on screen
+ * is decided by `toc.css` in core, because that is the mechanism rather than a
+ * look. The marker half is deliberately left alone — a reader who has clicked
+ * into the block is looking at the file, and dressing the five characters up
+ * would be claiming they are something else.
+ *
+ * The entries are buttons because Markdown headings have no id to link to
+ * (ADR-0002 §2.6), so they are stripped back to read as lines of a list rather
+ * than as controls. How deep an entry sits comes from core as
+ * `--newmd-toc-indent`, a plain number: the document knows how deep its
+ * headings go, the width of one step is a look and lives here.
+ *
+ * No copy on this block, on purpose — the engine's DOM carries no words either,
+ * so nothing about a table of contents has to be translated.
+ */
+[data-newmd-document] [data-newmd-toc-list] ul {
+  list-style: none;
+  margin: 1.25em 0;
+  padding: 0;
+  border-left: 2px solid var(--border-subtle);
+}
+
+[data-newmd-document] [data-newmd-toc-list] li {
+  margin: 0;
+}
+
+[data-newmd-document] [data-newmd-toc-entry] {
+  display: block;
+  width: 100%;
+  padding: 3px 10px 3px calc(12px + var(--newmd-toc-indent, 0) * 1.1em);
+  border: 0;
+  background: none;
+  color: var(--fg-muted);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+[data-newmd-document] [data-newmd-toc-entry]:hover {
+  color: var(--fg);
+  background: var(--bg-elevated);
+}
+
+/*
+ * A document with no headings still has a block in it, and a zero-height one
+ * would be a block the reader cannot click back into once the caret has left —
+ * the state they are in while reading the entries. A short strip is what keeps
+ * it reachable; there is no copy to put in it.
+ */
+[data-newmd-document] [data-newmd-toc-list] ul:empty {
+  min-height: 1.25em;
+}
