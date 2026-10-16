@@ -1,7 +1,7 @@
 # NewMD 交接文档（HANDOFF）
 
 > 给下一个 Claude Code 会话用：读完本文件即可接着干，不必重读整个仓库。
-> 更新时间：2026-10-16 ｜ HEAD：`a7d84cb`
+> 更新时间：2026-10-16 ｜ HEAD：`475c42f`
 > ⚠️ 仓库是 **public** 的 —— 任何文档、注释、提交信息里都不要写本机绝对路径、
 > token、密钥、账号。（上一版交接文档里的本机路径已在首次 push 前抹掉，别写回去。）
 
@@ -30,13 +30,13 @@
 | M4 工作区与外观                         | ✅                                                                                                                                                                                                                                                                                                                      |
 | M5 扩展渲染                             | ✅ 七片全部合入（见 §3.1）                                                                                                                                                                                                                                                                                              |
 | **v1.0 功能缺口**（用户本轮圈定的范围） | ✅ **7 项全部收口**：拖拽 `d1c1a1d`、本地路径插入 `146452b`、front matter 编辑 `a370e1a`、Shiki 高亮 `8d7d81c`、`[TOC]` 目录 `190d1cc` + `5e35a48`、重命名引用重写 `bb51e9b` `52198e5` `4ff3af9` `12738ae` `b7d3bbe` `ed5f6b9`（ADR-0003）、**多光标** `3694e03`（ADR-0004 —— 源码模式做，WYSIWYG **明确不做**）。见 §4 |
-| M6 导出与体验                           | 🟡 **已规划，未动代码** —— 设计全在 [ADR-0005](docs/adr/0005-export-and-experience.md)（七条决策 + 九片切分，见 §6）。用户明确要求**排在功能缺口之后**，现在排到了                                                                                                                                                      |
+| M6 导出与体验                           | 🟡 **设计已定案，① 已合入** —— 设计全在 [ADR-0005](docs/adr/0005-export-and-experience.md)（七条决策 + 九片切分，见 §6）。① 号切片（正文样式表）`475c42f`（§3.11），②–⑨ 一行没写。用户明确要求**排在功能缺口之后**，现在排到了                                                                                          |
 
-**验证基线（HEAD = `3694e03` —— 最后一次改代码的提交，它之后只有文档改动，数字不变）**：
+**验证基线（HEAD = `475c42f` —— 最后一次改代码的提交）**：
 
 | 检查                       | 结果                                                                         |
 | -------------------------- | ---------------------------------------------------------------------------- |
-| `pnpm test`                | core **450** / 36 文件，ui **39** / 5 文件 全绿                              |
+| `pnpm test`                | core **457** / 37 文件，ui **41** / 6 文件 全绿                              |
 | `pnpm typecheck`           | core / ui / desktop 三处 `tsc --noEmit` 全 0                                 |
 | prettier `--check`         | 全绿                                                                         |
 | `cargo check`（src-tauri） | 0                                                                            |
@@ -48,6 +48,9 @@
 **最近提交**（新到旧）：
 
 ```
+475c42f Give the document a stylesheet, and give the WYSIWYG body its scroll container
+ffcf358 Decide how M6 exports, and write down what the milestone actually is (ADR-0005)
+a7d84cb Close out HANDOFF.md for the gap list being empty
 3694e03 Give source mode more than one caret, and Alt the one key that grows it
 9cf78ad Bring HANDOFF.md up to date (6/6 v1.0 gaps, one left)
 ed5f6b9 Let a row in the tree be renamed, and refuse the names that cannot be
@@ -445,7 +448,7 @@ import 过 `@codemirror/*`。理由是 `MarkdownEditorHandle` 故意比两个引
   退而求其次断言**文件内容**（规则存在），并在注释里讲清为什么只能做到这一步 ——
   比假装它被覆盖了强。
 
-### 3.11 M6 第 ① 片：正文样式表 `core/src/document.css`
+### 3.11 M6 第 ① 片：正文样式表 `core/src/document.css`（`475c42f`）
 
 **做什么**：新建 `packages/core/src/document.css`，一份**只管文档、不管窗口**的样式表。它挂在一个属性
 上 —— **`[data-newmd-document]`** —— WYSIWYG 引擎把它设在自己的可编辑元素上（不是外壳给的宿主）。
