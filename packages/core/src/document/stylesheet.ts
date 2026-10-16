@@ -22,3 +22,19 @@ import highlightCss from "../editor/highlight.css?inline";
 import themeCss from "../theme.css?inline";
 
 export { documentCss, highlightCss, themeCss };
+
+/**
+ * KaTeX's stylesheet, which is not one of the three because of what it costs.
+ *
+ * Async, and not for a network reason: the fonts have to be carried inside it
+ * (ADR-0005 §2.6), which makes it ~400KB of base64 by the time it is built. A
+ * re-export would put every one of those bytes in the editor's entry chunk for
+ * a document that may hold no formula at all, so the module behind it is
+ * imported when it is asked for — the same reason `editor/mermaid.ts` imports
+ * its renderer this way. §2.6 asks for the bytes to be absent from an exported
+ * page that has no formula in it; this is the same courtesy to the app.
+ */
+export async function katexStylesheet(): Promise<string> {
+  const assets = await import("./katex-assets");
+  return assets.katexCss;
+}

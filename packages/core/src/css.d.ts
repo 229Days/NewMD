@@ -12,8 +12,24 @@
  * is a value import, so it needs a shape — and this is that shape, with no
  * `vite/client` behind it: the whole of that file is far more than the one
  * query this package uses.
+ *
+ * The other two are KaTeX's, which is a dependency rather than a file of ours:
+ * `?raw` for its stylesheet, because the urls in it have to be rewritten and
+ * Vite's own rewrite of them points at a path that means nothing outside the
+ * app (`document/katex-assets.ts` says why), and `?inline` for the fonts, which
+ * is the data URI the page needs (ADR-0005 §2.6).
  */
 declare module "*.css?inline" {
   const css: string;
   export default css;
+}
+
+declare module "*.css?raw" {
+  const css: string;
+  export default css;
+}
+
+declare module "*.woff2?inline" {
+  const font: string;
+  export default font;
 }

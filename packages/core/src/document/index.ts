@@ -61,9 +61,10 @@ export { nodeText } from "../outline";
 /** The three renderers, reused rather than re-imported (ADR-0005 §2.6). */
 export { highlight, type HighlightToken } from "../editor/highlight";
 export { renderMath } from "../editor/math";
+export { renderMermaid } from "../editor/mermaid";
 
 /** The front matter panel, which is markup rather than YAML. */
 export { frontMatterRows } from "./frontmatter";
 
 /** The stylesheets, as text, for whoever has to inline them into a page. */
-export { documentCss, highlightCss, themeCss } from "./stylesheet";
+export { documentCss, highlightCss, katexStylesheet, themeCss } from "./stylesheet";

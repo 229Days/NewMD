@@ -72,6 +72,36 @@ function watchTheme(): void {
 }
 
 /**
+ * Draw `source` in the theme `dark` names, or answer `null` if it will not draw.
+ *
+ * The renderer without the surface: a string in, an SVG string out. Hosting it
+ * is the caller's half — the editor puts the drawing over the source it keeps in
+ * the block, and the export writes it into the page it is building (ADR-0005
+ * §2.6), and the two want the same drawing rather than two opinions about it.
+ *
+ * `null` rather than an exception for the reason the block below states: a fence
+ * that does not parse is a state a document is in, not something to unwind
+ * through whoever asked for the drawing.
+ */
+export async function renderMermaid(source: string, dark: boolean): Promise<string | null> {
+  try {
+    const { default: mermaid } = await import("mermaid");
+    mermaid.initialize({
+      startOnLoad: false,
+      // Strict is Mermaid's default and the reason a caller may put the result
+      // through `innerHTML` at all: diagrams cannot reach for scripts or
+      // external resources.
+      securityLevel: "strict",
+      theme: dark ? "dark" : "default",
+    });
+    const { svg } = await mermaid.render(nextId(), source);
+    return svg;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Draw `source` into `host`, which is expected to already hold the source in a
  * `<pre>` that stays on screen until a drawing replaces it.
  */
@@ -85,25 +115,18 @@ export function drawMermaid(host: HTMLElement, source: string): Promise<void> {
   host.removeAttribute("data-rendered");
 
   return (async () => {
-    try {
-      const { default: mermaid } = await import("mermaid");
-      mermaid.initialize({
-        startOnLoad: false,
-        // Strict is Mermaid's default and the reason `innerHTML` below is
-        // safe: diagrams cannot reach for scripts or external resources.
-        securityLevel: "strict",
-        theme: isDark() ? "dark" : "default",
-      });
-      const { svg } = await mermaid.render(nextId(), source);
-      if (draws.get(host) !== token) return;
-      const holder = document.createElement("div");
-      holder.setAttribute("data-diagram", "");
-      holder.innerHTML = svg;
-      host.setAttribute("data-rendered", "ok");
-      host.append(holder);
-    } catch {
-      if (draws.get(host) !== token) return;
+    const svg = await renderMermaid(source, isDark());
+    // A theme change landing mid-render supersedes this draw, and the one that
+    // took its place has already said what the block is.
+    if (draws.get(host) !== token) return;
+    if (svg === null) {
       host.setAttribute("data-rendered", "error");
+      return;
     }
+    const holder = document.createElement("div");
+    holder.setAttribute("data-diagram", "");
+    holder.innerHTML = svg;
+    host.setAttribute("data-rendered", "ok");
+    host.append(holder);
   })();
 }

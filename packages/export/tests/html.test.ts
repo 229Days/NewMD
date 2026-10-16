@@ -289,33 +289,55 @@ describe("the page the export writes", () => {
     expect(panel?.querySelector("[data-value]")?.textContent).toBe("Sample");
   });
 
-  it("leaves a formula and a diagram as hosts, with their source in them", async () => {
-    // The two renderers ADR-0005 §2.6 reuses rather than re-imports, both left
-    // for the slice that carries what they need (ADR-0005 §1 measured it at
-    // 395KB of KaTeX stylesheet and woff2, plus a diagram library to fetch).
-    //
-    // A host and not nothing, because half of either renderer is worse than
-    // neither: KaTeX emits a MathML copy *and* an HTML copy and the rule that
-    // hides the first lives in the stylesheet not inlined yet, so a formula
-    // drawn now prints twice, once as markup nobody can read. The source in the
-    // block is what the editor falls back to as well, so the page reads the same
-    // as the editor does before either library has landed.
+  it("draws a formula, and carries the rule that hides the copy of it nobody can read", async () => {
+    // ADR-0005 §2.6: the editor's own renderer, and the editor's own stylesheet
+    // with it. The rule matters as much as the markup — KaTeX emits every
+    // formula twice, once as MathML for assistive technology and once as an HTML
+    // copy positioned by its stylesheet, and the rule that hides the first is in
+    // the stylesheet. A page carrying the markup without it prints the formula
+    // twice, the second time as text nobody can read.
     const { html } = await renderDocumentHtml(SAMPLE, { theme: "light" });
     const scope = scopeOf(html);
 
     const inline = scope.querySelector('[data-newmd-math="inline"]');
     expect(inline?.getAttribute("data-math")).toBe("x^2");
-    expect(inline?.textContent).toBe("x^2");
+    expect(inline?.querySelector(".katex")).not.toBeNull();
 
     const display = scope.querySelector('[data-newmd-math="display"]');
     expect(display?.getAttribute("data-math")).toBe("y = mx + b");
-    expect(display?.textContent).toBe("y = mx + b");
+    expect(display?.querySelector(".katex-display")).not.toBeNull();
+  });
 
-    // The other direction: the renderer slice is what turns `.katex` on, and a
-    // page that starts emitting it early is a page that lost the rule above.
-    expect(scope.querySelector(".katex")).toBeNull();
+  it("carries KaTeX's fonts, and only when a formula asks for them", async () => {
+    // The fonts are in the file rather than beside it (ADR-0005 §2.6), which is
+    // 296KB of `woff2` and ~395KB once base64 — so the second half of this is
+    // the point of the first: a document with no formula in it pays for neither.
+    const sums = await renderDocumentHtml(SAMPLE, { theme: "light" });
+    const prose = await renderDocumentHtml("A paragraph, and no formula.\n", { theme: "light" });
 
-    const diagram = scope.querySelector("[data-newmd-mermaid]");
+    expect(sums.html).toContain("data:font/woff2;base64,");
+    // Not one reference to a folder an exported page does not have.
+    expect(sums.html).not.toMatch(/url\(fonts\//);
+    expect(prose.html).not.toContain("data:font/woff2;base64,");
+    expect(prose.html).not.toContain(".katex");
+  });
+
+  it("draws the diagram, or leaves its source when it cannot draw one", async () => {
+    // Mermaid runs at export time in the reader's own WebView, because a diagram
+    // is a drawing rather than a document — and it is the one renderer whose
+    // output nothing here can predict, so what is pinned is the other half of
+    // the contract: a diagram that will not draw leaves the source it was drawn
+    // from, marked as an error, which is what the editor does with the same
+    // fence and the same library.
+    //
+    // jsdom has no `getBBox`, which is what Mermaid lays a graph out with, so
+    // this is the branch a test can reach. The drawing that succeeds is on the
+    // manual checklist, with the rest of what needs a real browser.
+    const { html } = await renderDocumentHtml(SAMPLE, { theme: "light" });
+    const diagram = scopeOf(html).querySelector("[data-newmd-mermaid]");
+
+    expect(diagram?.getAttribute("data-rendered")).toBe("error");
+    expect(diagram?.querySelector("[data-diagram]")).toBeNull();
     expect(diagram?.querySelector("pre code")?.textContent).toBe("graph TD\n  A --> B");
   });
 

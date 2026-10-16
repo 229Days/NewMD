@@ -114,6 +114,11 @@ describe("@newmd/core/document", () => {
     for (const expected of [
       ENTRY,
       "src/document/stylesheet.ts",
+      // Reached through an `import()` rather than a re-export, and listed here
+      // because that is what keeps the promise whole across it: the walk follows
+      // dynamic specifiers too, and a module it did not follow would be a module
+      // free to import an engine.
+      "src/document/katex-assets.ts",
       "src/editor/markdown.ts",
       "src/editor/inline-marks.ts",
       "src/editor/toc.ts",

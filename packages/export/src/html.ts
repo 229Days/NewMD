@@ -25,12 +25,14 @@
  * inverted, and the second is ADR-0003 §2.7's "do not guess" applied to a
  * construct that arrived without the one thing it needs.
  *
- * **What it renders as a host rather than a finished block.** Formulas and
- * diagrams, both with their source in them and both for the same reason: each one
- * needs something this writer does not carry yet — a library to fetch, or 395KB
- * of KaTeX's stylesheet and woff2, which ADR-0005 §1 measured. Shiki is *not* in
- * that group and is done here, because §1 measured the opposite of it: its tokens
- * carry both of their colours inline, so a fence needs one rule and no assets.
+ * **The renderers are core's, not this package's.** Shiki tokenises a fence,
+ * KaTeX lays out a formula, Mermaid draws a diagram — the same three the editor
+ * calls, reached through the same door (ADR-0005 §2.6) rather than imported
+ * again, so a page cannot disagree with the surface it was exported from. What
+ * each one costs is the difference between them: a token carries both of its
+ * colours inline, so a fence needs one rule and no assets; a formula needs
+ * KaTeX's stylesheet with 296KB of `woff2` carried inside it, which is why the
+ * page only pays for it when the document has a formula in it.
  */
 import {
   documentCss,
@@ -38,8 +40,11 @@ import {
   highlight,
   highlightCss,
   INLINE_MARKS,
+  katexStylesheet,
   nodeText,
   parseTransformed,
+  renderMath,
+  renderMermaid,
   themeCss,
   type HighlightToken,
   type Nodes,
@@ -127,6 +132,10 @@ interface Context {
   report: HtmlExportReport;
   /** Fences still being tokenised, so the page is not serialised before they land. */
   pending: Promise<void>[];
+  /** The one theme, for the one renderer that bakes its colours in rather than inheriting them. */
+  dark: boolean;
+  /** Whether any formula was written, which is what KaTeX's stylesheet is worth carrying for. */
+  math: boolean;
 }
 
 /** Render `markdown` as one page a browser can open from anywhere. */
@@ -136,7 +145,13 @@ export async function renderDocumentHtml(
 ): Promise<HtmlExport> {
   const tree = parseTransformed(markdown);
   const outline = outlineOf(tree);
-  const context: Context = { outline, report: { images: [] }, pending: [] };
+  const context: Context = {
+    outline,
+    report: { images: [] },
+    pending: [],
+    dark: options.theme === "dark",
+    math: false,
+  };
 
   // The element `document.css` is written against, and the one the export has to
   // get right or nothing inlined below it has any effect (ADR-0005 §2.5 落地补记).
@@ -145,12 +160,16 @@ export async function renderDocumentHtml(
   renderChildren(tree.children, scope, context);
 
   // Shiki is asked about every fence at once and answers when it answers, so the
-  // markup above is built first and filled in here.
+  // markup above is built first and filled in here. Mermaid is the same shape
+  // with a longer wait: the diagram is drawn while the page is being assembled.
   await Promise.all(context.pending);
 
-  const css = [themeCss, pageCss, documentCss, highlightCss, lookCss(options.settings)]
-    .filter((part) => part !== "")
-    .join("\n");
+  const parts = [themeCss, pageCss, documentCss, highlightCss, lookCss(options.settings)];
+  // KaTeX's stylesheet is 400KB with the fonts inside it (ADR-0005 §2.6), so it
+  // is asked for after the document has been walked rather than before: a page
+  // with no formula in it carries none of it.
+  if (context.math) parts.push(await katexStylesheet());
+  const css = parts.filter((part) => part !== "").join("\n");
 
   return {
     html: page({
@@ -342,16 +361,18 @@ function renderNode(node: Nodes, into: Element, context: Context): void {
       return;
 
     case "code":
-      if (node.lang === "mermaid") into.append(mermaidHost(node.value));
+      if (node.lang === "mermaid") into.append(mermaidHost(node.value, context));
       else into.append(fence(node, context));
       return;
 
     case "math":
-      into.append(mathHost(node.value, true));
+      context.math = true;
+      into.append(renderMath(node.value, true));
       return;
 
     case "inlineMath":
-      into.append(mathHost(node.value, false));
+      context.math = true;
+      into.append(renderMath(node.value, false));
       return;
 
     case "footnoteReference": {
@@ -534,33 +555,19 @@ function tokenSpans(tokens: readonly HighlightToken[], source: string): Node[] {
 }
 
 /**
- * A formula's block, with the source in it.
+ * A diagram's block, with the drawing asked for.
  *
- * Rendering it is the renderer slice, not this one, and the reason is that doing
- * half of it is worse than doing none: KaTeX's output carries a MathML copy for
- * assistive technology *and* an HTML copy positioned by its stylesheet, and the
- * rule that hides the first lives in the stylesheet this writer does not inline
- * yet. Without it a formula prints twice, once as markup nobody can read. The
- * source is what the editor's own blocks fall back to as well.
- */
-function mathHost(value: string, display: boolean): HTMLElement {
-  const host = document.createElement(display ? "div" : "span");
-  host.setAttribute("data-newmd-math", display ? "display" : "inline");
-  host.setAttribute("data-math", value);
-  host.textContent = value;
-  return host;
-}
-
-/**
- * A diagram's block, as the editor draws it before the drawing arrives.
+ * The source goes in a `<pre>` and stays there — it is what the block falls back
+ * to when the diagram will not draw, and what `document.css` hides once one has
+ * (the same `data-rendered` the editor sets, so one rule serves both).
  *
- * The source stays in a `<pre>`, which is both the element the editor's
- * `drawMermaid` replaces and the fallback it falls back to when a diagram will
- * not draw. Nothing here fetches Mermaid: it lives behind a dynamic import in the
- * editor's half of core, and inlining a drawing belongs with the image and font
- * work rather than with the page's shape.
+ * The drawing is not awaited here for the reason a fence's tokens are not: the
+ * block is placed now so the page's order is settled, and the drawing lands on
+ * it while the rest of the document is being walked. Mermaid is a library this
+ * package never sees — `renderMermaid` fetches it inside core's own module, and
+ * answers `null` rather than throwing when the source will not draw.
  */
-function mermaidHost(source: string): HTMLElement {
+function mermaidHost(source: string, context: Context): HTMLElement {
   const host = document.createElement("div");
   host.setAttribute("data-newmd-mermaid", "");
   host.setAttribute("data-language", "mermaid");
@@ -570,6 +577,23 @@ function mermaidHost(source: string): HTMLElement {
   code.textContent = source;
   pre.append(code);
   host.append(pre);
+
+  context.pending.push(
+    renderMermaid(source, context.dark).then((svg) => {
+      if (svg === null) {
+        host.setAttribute("data-rendered", "error");
+        return;
+      }
+      // Safe for the reason the editor's own copy is: Mermaid runs with
+      // `securityLevel: "strict"`, so a diagram cannot reach for scripts or
+      // anything external.
+      const holder = document.createElement("div");
+      holder.setAttribute("data-diagram", "");
+      holder.innerHTML = svg;
+      host.setAttribute("data-rendered", "ok");
+      host.append(holder);
+    }),
+  );
   return host;
 }
 
