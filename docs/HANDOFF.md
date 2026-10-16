@@ -1,7 +1,7 @@
 # NewMD 交接文档（HANDOFF）
 
 > 给下一个 Claude Code 会话用：读完本文件即可接着干，不必重读整个仓库。
-> 更新时间：2026-10-15 ｜ HEAD：`5e35a48`
+> 更新时间：2026-10-16 ｜ HEAD：`a7d84cb`
 > ⚠️ 仓库是 **public** 的 —— 任何文档、注释、提交信息里都不要写本机绝对路径、
 > token、密钥、账号。（上一版交接文档里的本机路径已在首次 push 前抹掉，别写回去。）
 
@@ -14,10 +14,11 @@
 
 **形态**：Tauri 2 桌面壳 + 纯 Web 核心（React 19 + TS strict + Vite + Zustand + Tailwind 4）。
 **架构权威文档**：[docs/adr/0001-typora-like-markdown-editor.md](docs/adr/0001-typora-like-markdown-editor.md)
-（ADR-0001，已接受；进度、验收、未决问题都以它为准）。另有三份局部 ADR：
+（ADR-0001，已接受；进度、验收、未决问题都以它为准）。另有四份局部 ADR：
 [0002 `[TOC]`](docs/adr/0002-toc-directive.md)、
 [0003 重命名引用重写](docs/adr/0003-rename-reference-rewrite.md)、
-[0004 多光标范围](docs/adr/0004-multi-cursor-scope.md)。
+[0004 多光标范围](docs/adr/0004-multi-cursor-scope.md)、
+[0005 M6 导出与体验](docs/adr/0005-export-and-experience.md)。
 
 **进度**（ADR §4 里程碑）：
 
@@ -29,7 +30,7 @@
 | M4 工作区与外观                         | ✅                                                                                                                                                                                                                                                                                                                      |
 | M5 扩展渲染                             | ✅ 七片全部合入（见 §3.1）                                                                                                                                                                                                                                                                                              |
 | **v1.0 功能缺口**（用户本轮圈定的范围） | ✅ **7 项全部收口**：拖拽 `d1c1a1d`、本地路径插入 `146452b`、front matter 编辑 `a370e1a`、Shiki 高亮 `8d7d81c`、`[TOC]` 目录 `190d1cc` + `5e35a48`、重命名引用重写 `bb51e9b` `52198e5` `4ff3af9` `12738ae` `b7d3bbe` `ed5f6b9`（ADR-0003）、**多光标** `3694e03`（ADR-0004 —— 源码模式做，WYSIWYG **明确不做**）。见 §4 |
-| M6 导出与体验                           | ⬜ 未开始 —— 用户明确要求**排在功能缺口之后**                                                                                                                                                                                                                                                                           |
+| M6 导出与体验                           | 🟡 **已规划，未动代码** —— 设计全在 [ADR-0005](docs/adr/0005-export-and-experience.md)（七条决策 + 九片切分，见 §6）。用户明确要求**排在功能缺口之后**，现在排到了                                                                                                                                                      |
 
 **验证基线（HEAD = `3694e03` —— 最后一次改代码的提交，它之后只有文档改动，数字不变）**：
 
@@ -230,7 +231,7 @@ jsdom **没有 `ClipboardEvent` / `DataTransfer`**（实测 `typeof` 均为 `und
 
 **已知未覆盖**：高亮不参与导出（M6 的一半）；`Decoration.inline` 不做 `mark`（代码块 `marks: ""`），
 所以是画上去的，不进文档；主题切换只有 CSS 一条路径，**没有测试能覆盖**（jsdom 不解析 `var()`），
-测试只能断言 `highlight.css` 里那条规则存在（见 §3.9 最后一条）。
+测试只能断言 `highlight.css` 里那条规则存在（见 §3.10 最后一条）。
 
 ### 3.6 v1.0 第 5 片：`[TOC]` 目录（`190d1cc` + `5e35a48`）
 
@@ -373,7 +374,30 @@ import 过 `@codemirror/*`。理由是 `MarkdownEditorHandle` 故意比两个引
 **顺带活过来的两个命令**：`defaultKeymap` 里的 `Mod-Alt-↑` / `Mod-Alt-↓`（`addCursorAbove/Below`）
 在同一个 facet 之下，之前按下去同样没反应。
 
-### 3.9 可复用手法（下一片多半还要用）
+### 3.9 M6 的规划（`/grill-with-docs` → ADR-0005）
+
+**没有代码**，只有决定。十一问全记在 `docs/adr/0005-export-and-experience.md`，这里只记**规划期间探到
+的、会改变做法的事实**（这些是本次现场核实的，不是回忆）：
+
+- **i18n 早就做完了**（M4 的 `zh-CN` / `en-US` + key 同构守卫），M6 那一项名存实亡 —— 已从交付物里划掉。
+- **拼写检查只剩一个开关**：`setSpellcheck` 从 handle 一路通到两个引擎的 `contentDOM.spellcheck`，
+  **一个调用方都没有**。
+- **E2E 从未执行过**：ADR §4 给每个里程碑尾巴都挂着它，而仓里没有 `*.spec.ts`、没有 playwright，
+  M1–M5 照样全标 ✅。已从门槛里移出（见 §5.1）。
+- **core 的 barrel 够不到 remark 链**：`editor/index.ts` 故意只导出一个工厂 + 一个契约，所以
+  `packages/export` 今天拿不到 `parse` / `parseTransformed` / toc 节点 / 三个渲染器 —— 而它们没有一个是
+  引擎形状的。所以 M6 要给 core 开一个窄 subpath。
+- **仓里没有任何正文排版样式**：`--editor-font-size` / `--editor-line-height` / `--font-editor` /
+  `--editor-max-width` 四个设置项**只有 CodeMirror 在用**（`codemirror.ts:66-77`），WYSIWYG 一个都没接。
+  「屏幕上什么样导出就什么样」此前**无内容可依**。
+- **ADR §2.7 里 DOCX 那一行的输入与另外三行不同**（说的是 ProseMirror 节点映射，而 ProseMirror doc 只
+  在活着的 WYSIWYG 里存在）—— 已统一成 mdast。
+- **实测数字**：KaTeX 字体目录 1.2MB 里三份格式重复，**woff2 子集只有 20 个文件 296KB**；
+  `highlight()` 已经往每个 token 写内联 `color`，所以导出物为代码块**不需要带任何 CSS**，只差
+  `highlight.css` 那一行。
+- **`docx` 与任何 zip 库都不在依赖树里**，M6 要新增两个依赖。
+
+### 3.10 可复用手法（下一片多半还要用）
 
 - **双引擎共用一个行为** → 在 `options.parent` 上挂 capture 监听（§3.2）。测试时注意：
   **`dragover` 要派发在 host 上**（ProseMirror 的 `editHandlers.dragover` 无条件 `preventDefault`，
@@ -464,13 +488,16 @@ import 过 `@codemirror/*`。理由是 `MarkdownEditorHandle` 故意比两个引
 
 ## 5. 用户本轮**没有选**的三类待办（明确留着，别顺手做掉）
 
-### 5.1 质量门槛：E2E / Playwright 基建（ADR §2.10 行 171、行 230）
+### 5.1 质量门槛：E2E / Playwright 基建（ADR §2.10 行 171）
 
 - 仓库里**没有任何 `*.spec.ts`、没有 playwright 依赖**。
 - ADR 要求覆盖：打开/保存/自动保存、WYSIWYG↔源码切换、图片粘贴落盘、查找替换、三种导出；
   Tauri 侧用 `tauri-driver` / WebDriver，或先在浏览器模式跑核心用例。
-- ADR 行 230 说每个里程碑结束时「必须跑完 golden + E2E + 中文输入法手测清单」——
-  目前 E2E 这半是空的。
+- **2026-10-16 起，这条从里程碑门槛里正式移出**：ADR-0001 §4 那句「每个里程碑结束时必须：跑完 golden +
+  **E2E** + 中文输入法手测」已删掉 E2E 三个字（[ADR-0005](docs/adr/0005-export-and-experience.md) §2.2）。
+  理由是它**从来没有被执行过** —— M1–M5 一次都没跑，五个里程碑照样全标了 ✅，而一条从不被执行的
+  要求只会训练读者忽略要求。**M1–M5 的 ✅ 也都不含 E2E。**
+- 于是它和 §5.2 / §5.3 一样，是一件**独立、没人认领**的工作，而不是某一片的尾巴。
 
 ### 5.2 小修清账（**逐条本轮核实过**）
 
@@ -491,18 +518,44 @@ import 过 `@codemirror/*`。理由是 `MarkdownEditorHandle` 故意比两个引
 
 ---
 
-## 6. M6「导出与体验」（ADR §4，用户要求排在功能缺口之后）
+## 6. M6「导出与体验」（**ADR-0005 已定案，代码一行没写**）
 
-> 交付物 = PDF/HTML/DOCX/MD 导出、专注模式、打字机模式、拼写检查、i18n、打包安装
+> 设计全文：`docs/adr/0005-export-and-experience.md`。**动手前读它，别读这一节。**
+> 交付物 = HTML / PDF / DOCX / Markdown 四种导出、专注模式、打字机模式、拼写检查**开关**、打包安装
+> （**i18n 删掉了** —— M4 就已完成）
 > 验收 = 中文 PDF 分页正确；DOCX 在 Word 中可打开且结构正确
 
-- `packages/export` **不存在**，一行都没有。
-- 已知风险（ADR §5）：中文 PDF 分页 / 字体嵌入（中等难度，`@page` + 系统字体栈 + 分页符 / 孤行控制）。
-- 未决问题 2（签名与自动更新）、3（Word 复杂场景降级）、4（拼写检查深度）都还没答。
-- Shiki 已合入（§3.5），M6 导出 HTML 要复用同一套 —— 给 M6 留的口是：
-  `highlight(code, lang)` 返回的 `{ offset, text, style }[]` 与编辑器形状无关，导出侧直接可用；
-  但**暗色半边在 `highlight.css` 里**，导出的静态 HTML 必须把那条规则一起带上（或按当前主题烘成单色）。
-  导出侧**不要**重新 `import("shiki")` 一套自己的 tokenizer，否则两边迟早会分叉。
+**切片的次序**（ADR-0005 §2.15）：
+
+| #   | 切片                                                                     | 为什么在这个位置                                     |
+| --- | ------------------------------------------------------------------------ | ---------------------------------------------------- |
+| ①   | 正文样式表（`core/src/document.css` + ui 接上 + 搬 front matter 那几段） | 同时是 HTML 导出的输入与专注模式的前提               |
+| ②   | `packages/export` 起壳 + `@newmd/core/document` + MD→HTML 序列化器       | 定形状：渲染器怎么复用、CSS 怎么内联、图片怎么内联   |
+| ③   | HTML 导出的通路（工具栏「导出」下拉 + 保存对话框 + 写盘）                | 让 ② 变成读者能按到的东西，也是 ④ 的基座             |
+| ④   | PDF（隐藏 iframe + 系统打印）                                            | 撞 ADR-0001 §5 唯一那条「中」风险，也是两条验收之一  |
+| ⑤   | Markdown + zip                                                           | 独立于 HTML 序列化器，最便宜的一条后端               |
+| ⑥   | DOCX                                                                     | 最大的一块，已知取舍                                 |
+| ⑦   | 专注模式 / 打字机模式                                                    | 与导出无关，唯一可以自由挪的两片                     |
+| ⑧   | 拼写检查开关                                                             | 一片，接上现成的通路（`setSpellcheck` 今天零调用方） |
+| ⑨   | 打包安装                                                                 | 收口（`pnpm tauri build` 从来没跑过）                |
+
+**形状一句话**：四条后端**共用一棵 mdast** —— 输入统一是 `getContent()` 那串 Markdown，导出侧自己
+parse（复用 core 已定的 remark 链）。HTML 是自包含单文件（CSS 内联、图片 base64、公式按需带 KaTeX
+woff2 字体）；PDF 就是把那份 HTML 塞进隐藏 iframe 打印；DOCX 里图走 PNG、公式降级为 LaTeX 源码；
+Markdown 是原文 + 图片打 zip。
+
+**必须记住的四件事**：
+
+1. **`packages/export` 今天不存在**，一行都没有；`docx` 与任何 zip 库也都不在依赖树里（两个新依赖）。
+2. **core 的 barrel 故意够不到 remark 链** —— 要开 `@newmd/core/document` 这个窄 subpath，并配一条
+   测试钉住「它只导出文档侧，不导出引擎」，否则它会慢慢长成第二个 `editor/`。
+3. **导出 HTML 要复用 §3.5 那套 Shiki**：`highlight(code, lang)` 返回的 `{ offset, text, style }[]` 与
+   编辑器形状无关，直接可用。**别**在导出侧重新 `import("shiki")` 一套自己的 tokenizer（两边迟早分叉）。
+   代码块**不需要带 CSS**（颜色已经写在每个 token 的行内 style 上），只差 `highlight.css` 那一行。
+4. **主题跟随当前、写死一份**；`[TOC]` 展开成 `<a href="#newmd-h-N">`，标题一律发位置 id。
+
+ADR-0001 的 §2.7、§4、§6 未决问题 3/4 与 ADR-0002 的 §2.8、§3、§5 都已经跟着改过一遍了，
+**别按旧版本的理解去做**。
 
 ---
 
@@ -552,6 +605,15 @@ pnpm build                                  # vite 产物体检
 - **ProseMirror `someProp` 不合并 `handleDOMEvents`** —— 只带 `paste` / `drop` 的 plugin 永远轮不到，
   因为 Milkdown 的 preset-commonmark 已经占了这个槽。这就是为什么图片入口放在 host 的 capture 监听上。
 - **golden 的 `singleTilde: false`**（GFM 关掉单波浪线）—— 别「顺手」打开，往返会红。
+- **`tests/highlight.test.ts` 在整仓跑的时候会偶发超时**（实测：`colours the text by the language on
+the fence` 报 `expected 0 to be greater than 0`，而单跑这个文件 386ms 就绿）。原因是 Shiki 的语法走
+  `import()` 惰性加载，而那句断言在 `vi.waitFor` 里 —— **默认超时 1000ms**，整仓 36 个文件并行时不够。
+  它是**预先就有的 flake，不是哪一片引入的**：重跑整仓即绿。要治就是给那一条 `waitFor` 显式加长
+  超时（或把 Shiki 的预加载提到 `beforeAll`），别去改高亮实现。
+- **ADR 的措辞与仓库的事实会分叉，动手前先核现场**：规划 M6 时一次就核出四处 —— i18n 其实早就
+  做完了、拼写检查的通路**零调用方**、E2E 对着五个 ✅ 里程碑**从未跑过**、core 的 barrel 够不到
+  remark 链。四处都是「文档说 A、代码是 B」，而**照着文档做会白做功**。核现场的成本是几条
+  `grep` / `ls`，收益是整片工作不白做。
 - **CodeMirror 的多选区是 opt-in，而且是静默的**：`EditorState.allowMultipleSelections` 没开时
   `applyTransaction` 会把 `tr.newSelection` 收敛成一个范围 —— **在造出这个范围的同一个 transaction
   里**。所以症状不是报错，是「手势没反应/只生效一半」（§3.8、ADR-0004 §1）。同类要先查的还有
@@ -570,6 +632,7 @@ pnpm build                                  # vite 产物体检
    - 状态栏在 WYSIWYG 里报的是**文档文本**的行列，不是源码行列（`changeWatcher` 注释写明了理由）。
 4. **不要动 locale JSON 的结构**（两套 key 必须同构、按字母序），也不要在源码里塞裸文案。
 5. **不要在这三类未选工作里顺手推进**：E2E/Playwright、§5.2 小修、§5.3 文档合规 ——
-   除非用户明确改主意。**§4 的 7 项功能缺口已经全部收口，所以下一件该做的是 M6（§6）**，
+   除非用户明确改主意。**§4 的 7 项功能缺口已经全部收口，M6 也已经规划完（ADR-0005）**，
+   所以下一件该做的是 **M6 的 ① 号切片：补 `packages/core/src/document.css` 那正文样式**（§6 的表），
    不是补 WYSIWYG 多光标（ADR-0004 明确不做），也不是回头去动 §3.8 那三个 Alt 手势。
 6. **不要把本机绝对路径写进任何仓库文件**（public 仓库）。

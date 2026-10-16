@@ -122,6 +122,12 @@ NodeView 还必须**显式声明 `ignoreMutation`**（只放行 contentDOM 内�
 
 核心只发射 `data-newmd-toc*` 属性，**样式写在 `packages/ui`**，与 `data-newmd-mermaid` / `data-newmd-frontmatter` 一致。这一片不引入任何面向读者的文案，因此不涉及双 locale。
 
+> **修订 2026-10-16**：归属规则改成三分。`[TOC]` 的条目是**文档内容**，导出 HTML 时也要跟着走，所以
+> 它（连同 front matter / mermaid 的阅读向规则）搬进 `packages/core/src/document.css`：**零件属性在
+> core、面向读取的样式也在 core、应用外壳在 ui**。理由与本节下面为 `toc.css` 留的那个例外是同一条，
+> 只是这一次的消费者是 `packages/export` 而不是 `markdown.ts`。见
+> [ADR-0005](0005-export-and-experience.md) §2.5。
+
 唯一例外是 §2.5 那两条 `display` 规则 —— 它们是这个两态机制本身，不是外观偏好，跟 Shiki 那片的 `highlight.css` 同理，需要随核心一起走：写在 `core/src/editor/toc.css`，由 `wysiwyg.ts` 引入。不写在 `toc.ts` 旁边，是因为**归并门槛 `markdown.ts` 也 import 那个模块**，而往返一行字节都不该依赖样式表。
 
 ---
@@ -130,7 +136,11 @@ NodeView 还必须**显式声明 `ignoreMutation`**（只放行 contentDOM 内�
 
 - **写不出独立成段的字面量 `[TOC]`。** 想要它，就用行内代码 `` `[TOC]` `` —— 那在另一个节点里，既不被识别也不被转义。这与 Typora 一致。
 - **段内不再能自由编辑而不触发降级。** 在 `toc` 块里敲一个字符，块立刻退回普通段落（再次删掉那个字符又会变回目录块）。这是 §2.4 不变量的直接后果，也是 Typora 的行为。
-- **条目是 `<button>` 而不是 `<a href="#…">`**（§2.6）。导出的 HTML 需要真锚点，M6 得在导出管线里把条目展开成带 id 的链接 —— 那是导出侧的事，届时 id 的生成规则要有自己的一份决定。
+- **条目是 `<button>` 而不是 `<a href="#…">`**（§2.6）。导出的 HTML 需要真锚点，M6 得在导出管线里把条目展开成带 id 的链接 —— 那是导出侧的事。
+  **已决（2026-10-16）**：id 规则定下来了 —— 标题一律发**位置 id** `newmd-h-N`（N 是它在文档里的
+  次序），`[TOC]` 展开成 `<ul><li><a href="#newmd-h-N">`，层级按 `level - minLevel` 缩进（与编辑器同一
+  套算法）。不走文本 slug，因为中文标题会整段坍成空串。见
+  [ADR-0005](0005-export-and-experience.md) §2.7。
 - **空目录**（文档里没有标题）渲染成一个空的 `<ul>`，不加任何文案。读者自己敲的 `[TOC]`，他知道那是什么。要不要有无标题提示，留给以后。
 - **`display:none` 藏 contentDOM 是浏览器行为，jsdom 测不到。** 测试只能断言 decoration 打出的 `data-mode`；「藏起来的那一半不会干扰读 DOM」这条要在真浏览器里手测一次。
 - **`[TOC]` 在列表项/引用块里仍然会被转义成 `\[TOC]`**（§2.3 的范围之外）。这是 §1 那条库行为的普遍后果，不是本片引入的；本片只对顶层独立段做了豁免。
@@ -153,7 +163,8 @@ NodeView 还必须**显式声明 `ignoreMutation`**（只放行 contentDOM 内�
 ## 5. 未决问题
 
 1. **嵌套目录 / 深度上限** —— 目前列全部标题、按 `level - minLevel` 缩进。要不要支持 `[TOC levels=1-3]` 这类参数？Typora 的 `[TOC]` 不带参数。
-2. **导出 HTML 的锚点方案** —— 见 §3，留给 M6。
+2. ~~**导出 HTML 的锚点方案**~~ —— **已关闭（2026-10-16）**：位置 id `newmd-h-N`，见 §3 与
+   [ADR-0005](0005-export-and-experience.md) §2.7。
 3. ~~**多光标下 `toc` 块的降级行为**~~ —— **已关闭（2026-10-15）**：这条问的组合到不了。
    `toc` 块只在 WYSIWYG 里是一个块，而多光标只做在源码模式（[ADR-0004](0004-multi-cursor-scope.md)
    §2.1）。原文写的「依赖 v1.0 缺口 ③」指的正是多光标这一项。
