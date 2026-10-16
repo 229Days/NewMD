@@ -1,3 +1,14 @@
+/**
+ * The import shapes core's sources need, pulled into every program that reads
+ * them.
+ *
+ * This package ships TypeScript, so a consumer type-checks `document/stylesheet.ts`
+ * as part of its own program — and that file imports stylesheets with `?inline`
+ * as values. `src/css.d.ts` carries the shapes; without this line a consumer
+ * reaching `@newmd/core/document` fails on files it never wrote.
+ */
+/// <reference path="./css.d.ts" />
+
 // Platform abstraction — the only way core reaches the host.
 export * from "./platform/types";
 export {

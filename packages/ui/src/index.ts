@@ -14,6 +14,7 @@ export { confirmAction, useDialog, type ConfirmOptions, type DialogAnswer } from
 
 export {
   handleCloseDocument,
+  handleExportHtml,
   handleNewDocument,
   handleOpenFile,
   handleOpenFolder,

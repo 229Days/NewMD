@@ -10,6 +10,7 @@ import {
 import { useEffect } from "react";
 import {
   handleCloseDocument,
+  handleExportHtml,
   handleNewDocument,
   handleOpenFile,
   handleOpenFolder,
@@ -44,6 +45,7 @@ const HOTKEY_COMMANDS: Record<HotkeyActionId, () => void> = {
   saveAs: () => void handleSaveAs(),
   closeDocument: () => void handleCloseDocument(),
   reload: () => void handleReloadFromDisk(),
+  exportHtml: () => void handleExportHtml(),
   insertImage: () => void handleInsertLocalImage(),
   find: () => useUi.getState().setFindOpen(true),
   // Find and replace share one bar, so the second key opens the same thing the

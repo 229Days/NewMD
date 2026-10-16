@@ -24,6 +24,7 @@ export type HotkeyActionId =
   | "saveAs"
   | "closeDocument"
   | "reload"
+  | "exportHtml"
   | "find"
   | "replace"
   | "insertImage"
@@ -81,6 +82,15 @@ export const HOTKEY_ACTIONS: readonly HotkeyAction[] = [
     firesInEditable: false,
   },
   { id: "reload", defaultBinding: "Mod+R", labelKey: "hotkeys.reload", firesInEditable: false },
+  {
+    id: "exportHtml",
+    // No reader arrives with this one in their fingers, so it is chosen to be
+    // rememberable rather than familiar: E for export, and Shift because plain
+    // Mod+E belongs to whatever the platform already does with it.
+    defaultBinding: "Mod+Shift+E",
+    labelKey: "hotkeys.exportHtml",
+    firesInEditable: true,
+  },
   { id: "find", defaultBinding: "Mod+F", labelKey: "hotkeys.find", firesInEditable: true },
   { id: "replace", defaultBinding: "Mod+H", labelKey: "hotkeys.replace", firesInEditable: true },
   {

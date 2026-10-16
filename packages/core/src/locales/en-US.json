@@ -5,6 +5,7 @@
   "common": {
     "cancel": "Cancel",
     "dismiss": "Dismiss",
+    "html": "HTML page",
     "loading": "Loading…",
     "markdown": "Markdown",
     "ok": "OK",
@@ -12,6 +13,7 @@
   },
   "titleBar": {
     "close": "Close",
+    "export": "Export",
     "folder": "Folder",
     "hideSidebar": "Hide sidebar",
     "new": "New",
@@ -103,6 +105,9 @@
   },
   "actions": {
     "expandFolder": "Expand folder",
+    "exportHtml": "Export as HTML",
+    "exported": "Exported {{name}}",
+    "exportedWithImages": "Exported {{name}}, but {{count}} image(s) stayed behind",
     "failed": "{{label}} failed: {{message}}",
     "insertImage": "Insert image",
     "newDocumentCreated": "New document created",
@@ -125,6 +130,7 @@
   "hotkeys": {
     "capturing": "Press a new shortcut",
     "closeDocument": "Close document",
+    "exportHtml": "Export as HTML",
     "find": "Find",
     "insertImage": "Insert image",
     "newDocument": "New document",
@@ -160,5 +166,8 @@
       "system": "System"
     },
     "title": "Settings"
+  },
+  "export": {
+    "html": "HTML page"
   }
 }

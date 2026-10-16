@@ -19,6 +19,7 @@ import {
   useWorkspace,
 } from "@newmd/core";
 import { saveLocalImage } from "@newmd/core/editor";
+import { renderDocumentHtml } from "@newmd/export";
 import { confirmAction } from "./dialog";
 
 /** The part of an error worth showing: what went wrong, not its stack. */
@@ -202,6 +203,66 @@ export async function handleRename(path: string, name: string): Promise<boolean>
  */
 export function handleRevealHeading(target: HeadingTarget): void {
   useUi.getState().requestReveal(target);
+}
+
+/**
+ * Write the document out as one self-contained HTML page (ADR-0005 §2.6).
+ *
+ * The page is built from the document's *text*, not from whatever the editor
+ * currently has on screen — the same reason ADR-0005 §2.3 gives for building
+ * every backend on mdast, and the reason this reads `doc.content` rather than
+ * reaching for the surface.
+ *
+ * Two things here are deliberately not errors. A document that has never been
+ * saved still exports: the page is self-contained apart from its pictures, and
+ * the ones that cannot be found are *reported* rather than refused (§2.6). A
+ * page that went out with pictures missing is reported too, and as something
+ * other than a success — the file is written either way, so a reader who is
+ * told "exported" has no way to learn that it is not the whole document.
+ */
+export async function handleExportHtml(): Promise<void> {
+  const doc = useEditor.getState().doc;
+  if (doc === null) return;
+
+  // Read before the dialog rather than after it, the same way `persistDoc`
+  // captures its text: what lands in the file is what the document said when
+  // the reader asked for it, and a tab switched or an edit made while a native
+  // dialog is up cannot change what is already on its way out.
+  const { content, path: docPath, fileName } = doc;
+
+  await report("actions.exportHtml", async () => {
+    const platform = getPlatform();
+    // Same name, other extension: `notes.md` is exported as `notes.html`, which
+    // is the name the reader who receives it expects to find.
+    const extension = platform.pathExtension(fileName);
+    const base = extension === null ? fileName : fileName.slice(0, -(extension.length + 1));
+
+    const chosen = await platform.pickSavePath(`${base}.html`, [
+      { name: t("common.html"), extensions: ["html", "htm"] },
+    ]);
+    if (chosen === null) return;
+
+    const { html, report: exported } = await renderDocumentHtml(content, {
+      theme: useUi.getState().theme,
+      title: base,
+      settings: useSettings.getState().settings,
+      // Absent for a document that has never been saved, which is a reason the
+      // export knows how to report (ADR-0005 §2.6).
+      docPath: docPath ?? undefined,
+    });
+    await platform.writeTextFile(chosen, html);
+
+    const name = platform.pathFileName(chosen) ?? chosen;
+    const leftBehind = exported.images.length;
+    useUi
+      .getState()
+      .notify(
+        leftBehind === 0 ? "success" : "info",
+        leftBehind === 0
+          ? t("actions.exported", { name })
+          : t("actions.exportedWithImages", { name, count: leftBehind }),
+      );
+  });
 }
 
 export async function handleSave(): Promise<void> {

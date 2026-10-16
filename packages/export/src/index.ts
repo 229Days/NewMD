@@ -1,4 +1,16 @@
 /**
+ * The import shapes this package's sources need, pulled into every program that
+ * reads them.
+ *
+ * A workspace package here ships TypeScript rather than a build, so whoever
+ * imports `@newmd/export` type-checks `html.ts` as part of its own program — and
+ * `page.css?inline` has to resolve there. `packages/ui` is the first such
+ * consumer, and without this line its typecheck fails on a file it never wrote.
+ * `./css.d.ts` says the rest, including why the shapes are not `vite/client`'s.
+ */
+/// <reference path="./css.d.ts" />
+
+/**
  * `@newmd/export` — the four backends of ADR-0005 §2.3, one at a time.
  *
  * One pipeline, four outputs, and one entry point each: everything a backend

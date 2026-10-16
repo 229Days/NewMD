@@ -9,6 +9,7 @@ import {
   pathFileName,
   pathJoin,
   pathParent,
+  t,
   type FileEntry,
   type FileFilter,
   type JsonValue,
@@ -22,6 +23,25 @@ import { Store } from "@tauri-apps/plugin-store";
 function extensionsOf(filters?: FileFilter[]): string[] {
   if (!filters?.length) return ["md", "markdown"];
   return filters.flatMap((f) => f.extensions).filter((e) => e !== "*");
+}
+
+/**
+ * What the dialog calls the filter it is showing.
+ *
+ * `FileFilter.name` is copy — the app asks for it with `t(...)` because the
+ * reader reads it — so it has to reach the dialog. It used to be thrown away
+ * here and the Rust side named every filter "Markdown", which showed up the
+ * first time a caller passed something else: inserting an image offered to open
+ * a "Markdown" file, and exporting offered to save one.
+ *
+ * A caller that names no filter still gets a word rather than an empty label,
+ * and gets it through `t` for the same reason: the dialog is the reader's, so
+ * the word has to follow their language like every other one in the app.
+ */
+function filterNameOf(filters?: FileFilter[]): string {
+  const named = filters?.[0];
+  if (named === undefined) return t("common.markdown");
+  return named.name;
 }
 
 export function isTauri(): boolean {
@@ -50,11 +70,15 @@ export function createTauriAdapter(): PlatformAdapter {
     pickFolder: () => invoke<string | null>("pick_folder"),
 
     pickFile: (filters) =>
-      invoke<string | null>("pick_file", { extensions: extensionsOf(filters) }),
+      invoke<string | null>("pick_file", {
+        filterName: filterNameOf(filters),
+        extensions: extensionsOf(filters),
+      }),
 
     pickSavePath: (defaultName, filters) =>
       invoke<string | null>("pick_save_path", {
         defaultName,
+        filterName: filterNameOf(filters),
         extensions: extensionsOf(filters),
       }),
 

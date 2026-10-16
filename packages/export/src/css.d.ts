@@ -10,9 +10,14 @@
  * The declarations are ambient and apply to the whole program, so they also
  * cover the imports inside `@newmd/core` — which matters, because those files are
  * type-checked as part of this package's program, and core's own copy of this
- * file is not in it. That is why the four shapes below are the same four core
+ * file is not in it. That is why the shapes below are the same shapes core
  * declares, kept in step by hand: two files that must agree, in two packages that
  * only meet through a tsconfig.
+ *
+ * `src/index.ts` references this file so the shapes travel with the package.
+ * Whoever imports `@newmd/export` then type-checks these sources with these
+ * declarations in hand, rather than needing a third copy of its own — which is
+ * what `packages/ui` would otherwise have had to write.
  */
 declare module "*.css?inline" {
   const css: string;

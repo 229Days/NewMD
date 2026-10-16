@@ -77,21 +77,26 @@ pub fn pick_folder(app: AppHandle) -> Option<String> {
 }
 
 #[tauri::command]
-pub fn pick_file(app: AppHandle, extensions: Vec<String>) -> Option<String> {
+pub fn pick_file(app: AppHandle, filter_name: String, extensions: Vec<String>) -> Option<String> {
     let mut picker = app.dialog().file();
     if !extensions.is_empty() {
         let names: Vec<&str> = extensions.iter().map(String::as_str).collect();
-        picker = picker.add_filter("Markdown", &names);
+        picker = picker.add_filter(&filter_name, &names);
     }
     picker.blocking_pick_file().and_then(|p| to_string_path(p).ok())
 }
 
 #[tauri::command]
-pub fn pick_save_path(app: AppHandle, default_name: String, extensions: Vec<String>) -> Option<String> {
+pub fn pick_save_path(
+    app: AppHandle,
+    default_name: String,
+    filter_name: String,
+    extensions: Vec<String>,
+) -> Option<String> {
     let mut picker = app.dialog().file().set_file_name(&default_name);
     if !extensions.is_empty() {
         let names: Vec<&str> = extensions.iter().map(String::as_str).collect();
-        picker = picker.add_filter("Markdown", &names);
+        picker = picker.add_filter(&filter_name, &names);
     }
     picker.blocking_save_file().and_then(|p| to_string_path(p).ok())
 }

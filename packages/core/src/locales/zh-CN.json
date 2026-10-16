@@ -5,6 +5,7 @@
   "common": {
     "cancel": "取消",
     "dismiss": "关闭",
+    "html": "HTML 网页",
     "loading": "加载中…",
     "markdown": "Markdown",
     "ok": "确定",
@@ -12,6 +13,7 @@
   },
   "titleBar": {
     "close": "关闭",
+    "export": "导出",
     "folder": "文件夹",
     "hideSidebar": "隐藏侧栏",
     "new": "新建",
@@ -103,6 +105,9 @@
   },
   "actions": {
     "expandFolder": "展开文件夹",
+    "exportHtml": "导出为 HTML",
+    "exported": "已导出 {{name}}",
+    "exportedWithImages": "已导出 {{name}}，但 {{count}} 张图片没能带进文件",
     "failed": "{{label}}失败：{{message}}",
     "insertImage": "插入图片",
     "newDocumentCreated": "已新建文档",
@@ -125,6 +130,7 @@
   "hotkeys": {
     "capturing": "请按下新的快捷键",
     "closeDocument": "关闭文档",
+    "exportHtml": "导出为 HTML",
     "find": "查找",
     "insertImage": "插入图片",
     "newDocument": "新建文档",
@@ -160,5 +166,8 @@
       "system": "跟随系统"
     },
     "title": "设置"
+  },
+  "export": {
+    "html": "HTML 网页"
   }
 }

@@ -182,6 +182,9 @@ importers:
       '@newmd/core':
         specifier: workspace:*
         version: link:../core
+      '@newmd/export':
+        specifier: workspace:*
+        version: link:../export
       tailwindcss:
         specifier: ^4.1.13
         version: 4.3.3

@@ -1,7 +1,8 @@
 import { formatChord, isDocumentDirty, useEditor, useSettings, useUi } from "@newmd/core";
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   handleCloseDocument,
+  handleExportHtml,
   handleNewDocument,
   handleOpenFile,
   handleOpenFolder,
@@ -19,16 +20,20 @@ interface ButtonProps {
   title?: string;
   primary?: boolean;
   disabled?: boolean;
+  /** Set on a menu's trigger, so what the button opens is announced and its state is readable. */
+  menuOpen?: boolean;
   children?: ReactNode;
 }
 
-function Button({ label, onClick, title, primary, disabled, children }: ButtonProps) {
+function Button({ label, onClick, title, primary, disabled, menuOpen, children }: ButtonProps) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
       title={title ?? label}
+      aria-haspopup={menuOpen === undefined ? undefined : "menu"}
+      aria-expanded={menuOpen}
       className={
         primary
           ? "inline-flex h-8 items-center gap-1.5 rounded-[var(--radius-sm)] bg-[var(--accent)] px-3 text-[13px] font-medium text-[var(--accent-fg)] transition-colors hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-40"
@@ -38,6 +43,83 @@ function Button({ label, onClick, title, primary, disabled, children }: ButtonPr
       {children}
       <span>{label}</span>
     </button>
+  );
+}
+
+/**
+ * One button for the verb, the formats behind it (ADR-0005 §2.14).
+ *
+ * Four more buttons on a toolbar that already has eight is the version that
+ * breaks first in a narrow window, and 「导出」 is one verb with four objects —
+ * so it is one button whose menu grows as the backends land. What is in the menu
+ * is what the app can actually write: an entry that does nothing when pressed is
+ * a worse answer than a menu with one entry in it, which is why PDF, DOCX and
+ * Markdown arrive here one at a time (§2.15) rather than as three dead rows now.
+ *
+ * The four also go into `HOTKEY_ACTIONS` as they land, so each is rebindable
+ * exactly where every other command is.
+ */
+function ExportMenu() {
+  const t = useT();
+  const doc = useEditor((s) => s.doc);
+  const busy = useUi((s) => s.busy);
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  // Same dismissal as the settings popover: a click anywhere else, or Escape.
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (event.target instanceof Node && !menuRef.current?.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    globalThis.addEventListener("mousedown", onPointerDown);
+    globalThis.addEventListener("keydown", onKeyDown);
+    return () => {
+      globalThis.removeEventListener("mousedown", onPointerDown);
+      globalThis.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  const formats = [{ id: "html", label: t("export.html"), run: handleExportHtml }];
+
+  return (
+    <div ref={menuRef} className="relative">
+      <Button
+        label={t("titleBar.export")}
+        onClick={() => setOpen(!open)}
+        disabled={busy || !doc}
+        menuOpen={open}
+      />
+      {open && (
+        <div
+          role="menu"
+          className="absolute top-9 right-0 z-20 min-w-40 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--bg-elevated)] p-1 shadow-lg"
+        >
+          {formats.map((format) => (
+            <button
+              key={format.id}
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                // Closed first: what the format does can open a dialog, and a
+                // menu left open behind one is a menu the reader has to dismiss
+                // twice.
+                setOpen(false);
+                void format.run();
+              }}
+              className="block w-full cursor-pointer rounded-[var(--radius-sm)] px-2.5 py-1.5 text-left text-[13px] text-[var(--fg-muted)] transition-colors hover:bg-[var(--bg-hover)] hover:text-[var(--fg)]"
+            >
+              {format.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -104,6 +186,7 @@ export function TitleBar() {
           onClick={() => void handleSaveAs()}
           disabled={busy || !doc}
         />
+        <ExportMenu />
         <Button
           label={t("titleBar.close")}
           onClick={() => void handleCloseDocument()}
