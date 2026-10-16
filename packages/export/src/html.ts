@@ -5,9 +5,8 @@
  * something a writer sends to somebody else, and every dependency the page keeps
  * on its origin is a way for it to arrive broken: a `<link>` to a stylesheet in
  * the app's bundle, an `<img src="./assets/…">` whose folder did not travel. So
- * the stylesheets are inlined as text and images are carried in the file — the
- * second half of that arrives in the next slice, and until it does this writer
- * *reports* every image it did not inline rather than claiming it managed.
+ * the stylesheets are inlined as text, images are carried in the file, and the
+ * ones that could not be are *reported* rather than quietly left behind.
  *
  * **Why mdast and not the rendered editor DOM.** ADR-0005 §2.3. A ProseMirror
  * document only exists inside a live WYSIWYG surface, and reaching into one would
@@ -50,7 +49,9 @@ import {
   type Nodes,
   type Root,
 } from "@newmd/core/document";
+import { getPlatform } from "@newmd/core";
 import type { AppSettings, ResolvedTheme } from "@newmd/core";
+import { inlineImage, type ImageReason } from "./images";
 import pageCss from "./page.css?inline";
 
 /** The reader's typography, as the settings store has it. */
@@ -75,19 +76,27 @@ export interface DocumentHtmlOptions {
   title?: string;
   /** Written over the palette, so the page is in the reader's own type. */
   settings?: Look;
+  /**
+   * The file this document is, so a relative image can be found beside it.
+   *
+   * The same field `ImageTarget` carries, for the same reason (ADR-0001 §2.8):
+   * the Markdown addresses a picture relative to the document, and something has
+   * to say where the document is. Absent for one that has never been saved,
+   * which is the case the report has a reason for.
+   */
+  docPath?: string;
 }
 
 /**
  * An image the page points at but does not carry.
  *
- * One reason today: nothing has tried to read the bytes yet. The next slice
- * resolves `url` against the document's directory and splits this into the ones
- * it inlined, the ones that were not there and the ones that were not readable —
- * which is why the field is a reason and not a boolean.
+ * A notice rather than an error: the page is still the document it was, and the
+ * path in it still works for a reader who keeps the file beside its pictures.
+ * What the reason is for is the case where it does not (ADR-0005 §2.6).
  */
 export interface HtmlImageNotice {
   url: string;
-  reason: "not-inlined";
+  reason: ImageReason;
 }
 
 export interface HtmlExportReport {
@@ -136,6 +145,8 @@ interface Context {
   dark: boolean;
   /** Whether any formula was written, which is what KaTeX's stylesheet is worth carrying for. */
   math: boolean;
+  /** The document's folder, for reading the pictures it points at. `null` when it has none. */
+  imageDir: string | null;
 }
 
 /** Render `markdown` as one page a browser can open from anywhere. */
@@ -151,6 +162,9 @@ export async function renderDocumentHtml(
     pending: [],
     dark: options.theme === "dark",
     math: false,
+    // Asked of the platform rather than split here, because which separator a
+    // path uses is the host's business and this module's is the page.
+    imageDir: options.docPath === undefined ? null : getPlatform().pathParent(options.docPath),
   };
 
   // The element `document.css` is written against, and the one the export has to
@@ -315,7 +329,19 @@ function renderNode(node: Nodes, into: Element, context: Context): void {
       image.setAttribute("alt", node.alt ?? "");
       if (node.title) image.setAttribute("title", node.title);
       into.append(image);
-      context.report.images.push({ url: node.url, reason: "not-inlined" });
+
+      // The order is kept and the bytes land when they land, so a page is never
+      // serialised with one picture missing and the reader never waits for the
+      // first one to be read before the last. The path stays as the `src` until
+      // then, which is also what it stays if there is nothing to put there.
+      context.pending.push(
+        inlineImage(node.url, context.imageDir).then((outcome) => {
+          if (outcome.kind === "inlined") image.setAttribute("src", outcome.src);
+          else if (outcome.kind === "kept") {
+            context.report.images.push({ url: node.url, reason: outcome.reason });
+          }
+        }),
+      );
       return;
     }
 

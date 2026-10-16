@@ -14,7 +14,16 @@
  * and fails a reader. Where they are made against the text it is because the
  * difference is a cascade, which jsdom does not run at all.
  */
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import {
+  pathExtension,
+  pathFileName,
+  pathJoin,
+  pathParent,
+  resetPlatform,
+  setPlatform,
+  type PlatformAdapter,
+} from "@newmd/core";
 import { renderDocumentHtml } from "../src/index";
 
 /**
@@ -84,6 +93,71 @@ function scopeOf(html: string): Element {
   if (scope === null) throw new Error("the exported page has no document scope");
   return scope;
 }
+
+/** The file the fake disk holds a picture at, and the document that points at it. */
+const DOC_PATH = "/ws/notes/todo.md";
+const DOC_DIR = "/ws/notes";
+
+/** Eight bytes that make a file a PNG, and are the point of the encoding. */
+const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01, 0x02, 0x03]);
+
+/** What the fake disk holds, by path. */
+let disk: Record<string, Uint8Array> = {};
+/** Every path the export asked the disk for. */
+let asked: string[] = [];
+
+/**
+ * A disk, and nothing else — everything on it but the bytes is core's own.
+ *
+ * The path helpers are the real `pathJoin` and friends rather than a second
+ * spelling of them, because that is what the adapters use: `tauri.ts` passes
+ * core's straight through. A fixture with its own version would answer a
+ * different question about which file was asked for — resolving `.` and `..`
+ * one way while the export resolved them another, and agreeing either way.
+ */
+function fakePlatform(): PlatformAdapter {
+  const unused = (): never => {
+    throw new Error("not used by an export");
+  };
+  return {
+    kind: "browser",
+    pickFolder: unused,
+    pickFile: unused,
+    pickSavePath: unused,
+    listDir: unused,
+    readTextFile: unused,
+    writeTextFile: unused,
+    writeBinaryFile: unused,
+    createDir: unused,
+    renamePath: unused,
+    removePath: unused,
+    pathExists: unused,
+    // The one this file needs.
+    readBinaryFile: async (path) => {
+      asked.push(path);
+      const bytes = disk[path];
+      if (bytes === undefined) throw new Error(`no such file: ${path}`);
+      return bytes;
+    },
+    pathJoin,
+    pathParent,
+    pathFileName,
+    pathExtension,
+    readAppData: async () => null,
+    writeAppData: async () => {},
+    deleteAppData: async () => {},
+  } satisfies PlatformAdapter;
+}
+
+beforeEach(() => {
+  disk = {};
+  asked = [];
+  setPlatform(fakePlatform());
+});
+
+afterEach(() => {
+  resetPlatform();
+});
 
 describe("the page the export writes", () => {
   it("puts the body in the scope the document stylesheet is written against", async () => {
@@ -360,16 +434,94 @@ describe("the page the export writes", () => {
     expect(page.querySelector("b")).toBeNull();
   });
 
-  it("reports the images it did not inline rather than guessing at them", async () => {
-    // ADR-0005 §2.6: an image that cannot be resolved keeps the path its author
-    // wrote and is counted, on the same principle as ADR-0003 §2.7 — the file
-    // says what it says, and the writer says what it could not do. Reading the
-    // bytes is the next slice; until then every image is one this writer did not
-    // inline, and it says so instead of claiming an empty report.
+  it("carries a picture that sits beside the document", async () => {
+    // ADR-0005 §2.6, and the reason §2.6 gives: the common use of an exported
+    // page is sending it to somebody, and `./assets/` stops meaning anything the
+    // moment the file leaves the folder it was written in.
+    disk[`${DOC_DIR}/assets/map.png`] = PNG;
+
+    const { html, report } = await renderDocumentHtml(SAMPLE, {
+      theme: "light",
+      docPath: DOC_PATH,
+    });
+    const src = parse(html).querySelector("img")?.getAttribute("src") ?? "";
+
+    expect(src.startsWith("data:image/png;base64,")).toBe(true);
+    // Decoded and compared byte for byte: what is being checked is that the
+    // file survived the round trip through base64, which is the one thing an
+    // inlined picture can silently get wrong.
+    expect(
+      [...atob(src.slice("data:image/png;base64,".length))].map((c) => c.charCodeAt(0)),
+    ).toEqual([...PNG]);
+    // Asked for the file the document's own spelling pointed at, and nothing else.
+    expect(asked).toEqual([`${DOC_DIR}/assets/map.png`]);
+    expect(report.images).toEqual([]);
+  });
+
+  it("leaves a picture it could not resolve where its author put it", async () => {
+    // A document that has never been saved has no folder, so a relative path has
+    // nothing to be relative to. The path stays as written — the page is still
+    // the document it was, and a reader who later moves the page next to the
+    // pictures gets them back (ADR-0003 §2.7: the file says what it says).
     const { html, report } = await renderDocumentHtml(SAMPLE, { theme: "light" });
 
     expect(parse(html).querySelector("img")?.getAttribute("src")).toBe("./assets/map.png");
-    expect(report.images).toEqual([{ url: "./assets/map.png", reason: "not-inlined" }]);
+    expect(report.images).toEqual([{ url: "./assets/map.png", reason: "unresolved" }]);
+    expect(asked).toEqual([]);
+  });
+
+  it("says which pictures it could not read", async () => {
+    const { html, report } = await renderDocumentHtml("![map](./assets/gone.png)\n", {
+      theme: "light",
+      docPath: DOC_PATH,
+    });
+
+    expect(parse(html).querySelector("img")?.getAttribute("src")).toBe("./assets/gone.png");
+    expect(report.images).toEqual([{ url: "./assets/gone.png", reason: "unreadable" }]);
+  });
+
+  it("leaves a picture on somebody else's server alone, and does not go and get it", async () => {
+    // Fetching it would put the reader's address on a third party's log for the
+    // sake of a file, and would make the page's contents depend on that server
+    // still having it. The URL is what the document said, and it still works.
+    const { html, report } = await renderDocumentHtml(
+      "![a](https://example.com/a.png)\n\n![b](//cdn.example.com/b.png)\n",
+      { theme: "light", docPath: DOC_PATH },
+    );
+
+    const sources = [...parse(html).querySelectorAll("img")].map((img) => img.getAttribute("src"));
+    expect(sources).toEqual(["https://example.com/a.png", "//cdn.example.com/b.png"]);
+    expect(report.images.map((notice) => notice.reason)).toEqual(["remote", "remote"]);
+    expect(asked).toEqual([]);
+  });
+
+  it("leaves a picture that is already in the file alone", async () => {
+    // What this writer produces, arriving back in: reporting it as something it
+    // failed to inline would be a page calling its own output a problem.
+    const { report } = await renderDocumentHtml("![a](data:image/gif;base64,R0lGODlh)\n", {
+      theme: "light",
+      docPath: DOC_PATH,
+    });
+
+    expect(report.images).toEqual([]);
+    expect(asked).toEqual([]);
+  });
+
+  it("says so when a file's name does not say what kind of picture it is", async () => {
+    // A data URI has to carry a media type, and a name with no extension is not
+    // one — the bytes might be anything. Left as written rather than labelled
+    // `application/octet-stream`, which is a label that renders as nothing.
+    disk[`${DOC_DIR}/assets/scan`] = PNG;
+
+    const { report } = await renderDocumentHtml("![a](./assets/scan)\n", {
+      theme: "light",
+      docPath: DOC_PATH,
+    });
+
+    expect(report.images).toEqual([{ url: "./assets/scan", reason: "unknown-type" }]);
+    // And not read: a file whose type is unknown before it is opened is one
+    // there was never a reason to open.
+    expect(asked).toEqual([]);
   });
 
   it("names the document after its first heading when it is not told otherwise", async () => {

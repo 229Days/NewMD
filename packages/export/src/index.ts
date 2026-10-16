@@ -14,3 +14,4 @@
  */
 export { renderDocumentHtml } from "./html";
 export type { DocumentHtmlOptions, HtmlExport, HtmlExportReport, HtmlImageNotice } from "./html";
+export type { ImageReason } from "./images";
