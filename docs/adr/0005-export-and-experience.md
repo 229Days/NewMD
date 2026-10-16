@@ -98,6 +98,16 @@ KaTeX / Mermaid 三个渲染器、以及 §2.5 那份样式表。
 **代价**：core 多一个公共 subpath，要靠一条测试钉住「它只导出文档侧，不导出引擎」——否则它会慢慢
 长成第二个 `editor/`。
 
+> **落地补记（2026-10-16，切片 ②）**：门开了，`packages/export` 的依赖**恰好两个**，与上面那句
+> 一字不差 —— `@newmd/core` 的公共 barrel（`getPlatform` 与类型）与 `@newmd/core/document`。
+> 三个渲染器（Shiki / KaTeX / Mermaid）全部走这道门，导出侧一个都不再 import；pnpm 的严格
+> node_modules 让「不小心又 import 一个」在类型检查阶段就失败，这是这道门白拿的第二层守卫。
+>
+> `tests/document-subpath.test.ts` 是主守卫：它不比对依赖清单，而是**走 import 图**（相对说明符
+> BFS，连动态 `import()` 也跟），因为门被拆掉的方式就是一次次「顺手再 re-export 一个东西」，而那种
+> 破坏在屏幕上没有任何征兆。`editor/mermaid.ts` 里抽出来的 `renderMermaid` 就在这张图里 —— 编辑器
+> 与导出共用它，这也正是它不必搬进 `document/` 的原因。
+
 ### 2.5 正文样式表住 core，且先把它补上
 
 新建 `packages/core/src/document.css`，内容分两半：
@@ -144,6 +154,42 @@ React 组件包，而导出与 React 毫无关系，依赖图上会多一条从�
 **代价**：一个含公式的文档导出物约 400KB 起，且要写一段把 `@font-face` 里的 `url(fonts/…)` 换成
 data URI 的改写。解不开的图片（新文档没有目录、路径指向工作区之外）**保留原相对写法**并计入报告，
 不断链也不猜 —— 与 ADR-0003 §2.7 同一条原则。
+
+> **落地补记（2026-10-16，切片 ②）**：HTML 后端落地，`renderDocumentHtml(markdown, options)`
+> 进 `packages/export/src/index.ts`。
+>
+> - **调色板搬进 `core/src/theme.css`**。导出物要与应用长在同一批 token 上，而 `packages/export`
+>   不能依赖 `packages/ui` —— 为了一个十六进制色去 import 一个 React 组件包，就是把导出变回「应用
+>   的一次构建」。所以 token 归 core（`themeCss`），零件属性归 core，应用外壳仍归 ui。
+> - **内联的五段 + 按需一段**：`theme.css` / `page.css` / `document.css` / `highlight.css`，加上由
+>   当前设置算出的 `:root` 覆盖块，按序拼进一个 `<style>`；文档里出现过公式才追加 KaTeX 那一份。
+>   `page.css` 是**导出独有**的一段（纸张尺寸、页边、打印规则），所以它留在 `packages/export` 而
+>   不是 core。
+> - **两处挂点**：`data-theme` 在 `<html>` 上（`theme.css` / `highlight.css` 读它），正文元素带
+>   `[data-newmd-document]`（§2.5 落地时定下的那个属性）。少任何一个，内联进去的规则都一条不生效 ——
+>   这是「导出物没样式」最可能的两种死法，jsdom 里测不出来（不跑层叠），所以两边各有一条断言钉着。
+> - **两份东西故意不画**：`definition`（链接定义是绑定不是内容，Markdown 渲染器对它一律不画东西；
+>   编辑器画它只因为它得把文件给读者看）与**裸 `html`**（让文档把标记写进一个别人从桌面打开的文件
+>   里，是转义问题反过来；§3 记这条）。这不构成「所见即所得」的破例：这份一致性说的是**文档的语义**
+>   由同一套渲染器画出来，而不是编辑器里的每个装饰都得跟着走；引用不出来的引用式链接同理不猜
+>   （ADR-0003 §2.7）。
+> - **KaTeX 走 `?raw`，字体是 20 行显式 import**。项目自己的样式表用 `?inline`，但 Vite 处理过的
+>   样式表会把 `url()` 改写成构建产物的引用，而读这份页面的机器上没有那个构建；字体不能用
+>   `import.meta.glob` 收，因为 Vite 的 glob 不进 `node_modules`（实测 0 条）。改写放在
+>   `core/src/document/katex-assets.ts`：20 处 `@font-face`、60 处 `url(fonts/…)` 里的 `.woff2`
+>   换成 data URI，`.woff` / `.ttf` 那两条回退直接删。**按需**这件事有两个方向：导出物不白带
+>   395KB，应用入口分块也不白背它（`katexStylesheet()` 走 `import()` 而不是 re-export）。
+> - **`renderMermaid(source, dark)` 两个界面共用**，留在 `editor/mermaid.ts`（`drawMermaid` 是它的
+>   DOM 宿主，`tests/mermaid.test.ts` 是抽取的回归网）。导出侧写编辑器写的同一个 `data-rendered`，
+>   所以 `document.css` 里那条「画成就藏源码」的规则两边同时成立；画不出来就保留源码并标错。jsdom
+>   里 Mermaid 起不来（`getBBox is not a function`），所以自动化测试只钉得住失败那一支，成功那一支
+>   在手测清单上。
+> - **图片四种理由 + `docPath`**：`remote`（URL 一律不去取）、`unresolved`（没保存过的文档没有目录
+>   可相对）、`unreadable`（路径解析出来了，读失败）、`unknown-type`（data URI 必须带媒体类型，而
+>   `application/octet-stream` 是个什么都画不出来的标签，所以类型在开文件**之前**由扩展名定下）。
+>   四种都保留作者原来的路径并进报告，不猜也不留白。`docPath` 是文档自己的路径，形状照抄
+>   `ImageTarget`（ADR-0001 §2.8）；字节走平台适配器 `readBinaryFile`，导出包不碰文件系统 ——
+>   多出来的原因只有一条：`remote` 是**有意**不取，不是取不到。
 
 ### 2.7 锚点用位置 id
 
@@ -271,6 +317,10 @@ ADR-0001 §2.11「设置面板可改」的直接兑现。
 - **光栅化（SVG → canvas → PNG）在 jsdom 里测不到**（§2.10），进手测清单。
 - **iframe 打印在 jsdom 里测不到**（§2.9），进手测清单。
 - **打字机模式的滚动在 jsdom 里测不到**（§2.12），进手测清单。
+- **Mermaid 画成功那一支在 jsdom 里测不到**（切片 ② 实测：Mermaid 要 `getBBox`，jsdom 没有布局）。
+  自动化只钉得住「画不出来时保留源码并标错」，画成功进手测清单。
+- **裸 `html` 不进导出物**（切片 ② 有意为之，见 §2.6）。文档里写 `<div>` 的段落，编辑器会照着画，
+  导出物里是空的 —— 取舍在安全那一侧，不是漏做。要放开得先想清楚「这份文件是给谁打开的」。
 - **数学公式在 Word 里是 LaTeX 源码**（§2.10）。想要真公式要自己实现 MathML → OMML，那是另一个
   大工程。
 - **导出物是单一主题的**（§2.8）。深色文档贴进白底环境会看到深色纸。

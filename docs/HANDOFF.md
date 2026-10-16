@@ -1,7 +1,7 @@
 # NewMD 交接文档（HANDOFF）
 
 > 给下一个 Claude Code 会话用：读完本文件即可接着干，不必重读整个仓库。
-> 更新时间：2026-10-16 ｜ HEAD：`475c42f`
+> 更新时间：2026-10-16 ｜ HEAD：`cfbd7f6`
 > ⚠️ 仓库是 **public** 的 —— 任何文档、注释、提交信息里都不要写本机绝对路径、
 > token、密钥、账号。（上一版交接文档里的本机路径已在首次 push 前抹掉，别写回去。）
 
@@ -22,32 +22,36 @@
 
 **进度**（ADR §4 里程碑）：
 
-| 里程碑                                  | 状态                                                                                                                                                                                                                                                                                                                    |
-| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| M1 壳与文件 IO                          | ✅                                                                                                                                                                                                                                                                                                                      |
-| M2 WYSIWYG 核心                         | ✅                                                                                                                                                                                                                                                                                                                      |
-| M3 源码模式与多标签                     | ✅                                                                                                                                                                                                                                                                                                                      |
-| M4 工作区与外观                         | ✅                                                                                                                                                                                                                                                                                                                      |
-| M5 扩展渲染                             | ✅ 七片全部合入（见 §3.1）                                                                                                                                                                                                                                                                                              |
-| **v1.0 功能缺口**（用户本轮圈定的范围） | ✅ **7 项全部收口**：拖拽 `d1c1a1d`、本地路径插入 `146452b`、front matter 编辑 `a370e1a`、Shiki 高亮 `8d7d81c`、`[TOC]` 目录 `190d1cc` + `5e35a48`、重命名引用重写 `bb51e9b` `52198e5` `4ff3af9` `12738ae` `b7d3bbe` `ed5f6b9`（ADR-0003）、**多光标** `3694e03`（ADR-0004 —— 源码模式做，WYSIWYG **明确不做**）。见 §4 |
-| M6 导出与体验                           | 🟡 **设计已定案，① 已合入** —— 设计全在 [ADR-0005](docs/adr/0005-export-and-experience.md)（七条决策 + 九片切分，见 §6）。① 号切片（正文样式表）`475c42f`（§3.11），②–⑨ 一行没写。用户明确要求**排在功能缺口之后**，现在排到了                                                                                          |
+| 里程碑                                  | 状态                                                                                                                                                                                                                                                                                                                                             |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| M1 壳与文件 IO                          | ✅                                                                                                                                                                                                                                                                                                                                               |
+| M2 WYSIWYG 核心                         | ✅                                                                                                                                                                                                                                                                                                                                               |
+| M3 源码模式与多标签                     | ✅                                                                                                                                                                                                                                                                                                                                               |
+| M4 工作区与外观                         | ✅                                                                                                                                                                                                                                                                                                                                               |
+| M5 扩展渲染                             | ✅ 七片全部合入（见 §3.1）                                                                                                                                                                                                                                                                                                                       |
+| **v1.0 功能缺口**（用户本轮圈定的范围） | ✅ **7 项全部收口**：拖拽 `d1c1a1d`、本地路径插入 `146452b`、front matter 编辑 `a370e1a`、Shiki 高亮 `8d7d81c`、`[TOC]` 目录 `190d1cc` + `5e35a48`、重命名引用重写 `bb51e9b` `52198e5` `4ff3af9` `12738ae` `b7d3bbe` `ed5f6b9`（ADR-0003）、**多光标** `3694e03`（ADR-0004 —— 源码模式做，WYSIWYG **明确不做**）。见 §4                          |
+| M6 导出与体验                           | 🟡 **设计已定案，①② 已合入** —— 设计全在 [ADR-0005](docs/adr/0005-export-and-experience.md)（七条决策 + 九片切分，见 §6）。① 号切片（正文样式表）`475c42f`（§3.11），② 号切片（`packages/export` + `@newmd/core/document` + MD→HTML 序列化器）`08cbcb4` `240fd92` `cfbd7f6`（§3.12），③–⑨ 一行没写。用户明确要求**排在功能缺口之后**，现在排到了 |
 
-**验证基线（HEAD = `475c42f` —— 最后一次改代码的提交）**：
+**验证基线（HEAD = `cfbd7f6` —— 最后一次改代码的提交）**：
 
-| 检查                       | 结果                                                                         |
-| -------------------------- | ---------------------------------------------------------------------------- |
-| `pnpm test`                | core **457** / 37 文件，ui **41** / 6 文件 全绿                              |
-| `pnpm typecheck`           | core / ui / desktop 三处 `tsc --noEmit` 全 0                                 |
-| prettier `--check`         | 全绿                                                                         |
-| `cargo check`（src-tauri） | 0                                                                            |
-| `pnpm build`               | 0（有 chunk 体积警告，见 §5.2；Shiki 让产物从 5.2 MB 涨到 16.2 MB，见 §3.5） |
-| golden                     | `packages/core/tests/golden/` **21 个语料**，其中 6 个带 `.expected.md`      |
+| 检查                       | 结果                                                                                        |
+| -------------------------- | ------------------------------------------------------------------------------------------- |
+| `pnpm test`                | core **466** / 40 文件，ui **42** / 6 文件，export **26** / 1 文件（新包） 全绿             |
+| `pnpm typecheck`           | core / export / ui / desktop 四处 `tsc --noEmit` 全 0                                       |
+| prettier `--check`         | 全绿                                                                                        |
+| `cargo check`（src-tauri） | 0                                                                                           |
+| `pnpm build`               | 0（有 chunk 体积警告，见 §5.2；Shiki 让产物从 5.2 MB 涨到 16.2 MB，见 §3.5）                |
+| golden                     | `packages/core/tests/golden/` **21 个语料**，其中 6 个带 `.expected.md`（② 不碰语法，未增） |
 
 **每改一行都应复现这一基线**，命令见 §7。
 
 **最近提交**（新到旧）：
 
 ```
+cfbd7f6 Carry the pictures into the page (M6 slice ②.3)
+240fd92 Draw the formulas and the diagrams in the export (M6 slice ②.2)
+08cbcb4 Open a second door onto core, and write the HTML export behind it (M6 slice ②.1)
+2bf70b5 Bring HANDOFF.md up to date (M6 slice ① merged)
 475c42f Give the document a stylesheet, and give the WYSIWYG body its scroll container
 ffcf358 Decide how M6 exports, and write down what the milestone actually is (ADR-0005)
 a7d84cb Close out HANDOFF.md for the gap list being empty
@@ -87,6 +91,10 @@ b88df55 Initial commit: NewMD through M4
    - **边界画在 `src/`，不在 `tests/`**：`packages/core/tests/multi-cursor.test.ts` 直接 import 了
      `@codemirror/state` / `@codemirror/view`（全仓测试里就这么一处，§3.8 讲了为什么非这样不可）。
      这不违反本条 —— 但它也不该变成习惯：能走 handle 观察的就走 handle。
+   - **`@newmd/core/document` 是这条边界的第二道门**（② 号切片立的，ADR-0005 §2.4）：从它出发能走到的
+     东西，一律不许 import Milkdown / CodeMirror / ProseMirror。守卫是
+     `tests/document-subpath.test.ts`（走 import 图，连 `import()` 也跟）—— 往门里加文件要在它的
+     `EXPECTED_FILES` 里登记，否则守卫红。
 2. **golden 语料是合并硬门槛**（ADR §2.10）：`md → ProseMirror doc → md` 必须字节级一致。
    **任何新的 _语法_**（不是新的渲染方式）都要：往 `packages/core/tests/golden/` 补语料 +
    在 `tests/golden.ts` 的 `EXERCISES` 里登记对应 mdast 节点类型
@@ -388,8 +396,8 @@ import 过 `@codemirror/*`。理由是 `MarkdownEditorHandle` 故意比两个引
 - **E2E 从未执行过**：ADR §4 给每个里程碑尾巴都挂着它，而仓里没有 `*.spec.ts`、没有 playwright，
   M1–M5 照样全标 ✅。已从门槛里移出（见 §5.1）。
 - **core 的 barrel 够不到 remark 链**：`editor/index.ts` 故意只导出一个工厂 + 一个契约，所以
-  `packages/export` 今天拿不到 `parse` / `parseTransformed` / toc 节点 / 三个渲染器 —— 而它们没有一个是
-  引擎形状的。所以 M6 要给 core 开一个窄 subpath。
+  `packages/export` 拿不到 `parse` / `parseTransformed` / toc 节点 / 三个渲染器 —— 而它们没有一个是
+  引擎形状的。**切片 ② 已开 `@newmd/core/document` 这道窄门**（§3.12）。
 - **仓里没有任何正文排版样式**：`--editor-font-size` / `--editor-line-height` / `--font-editor` /
   `--editor-max-width` 四个设置项**只有 CodeMirror 在用**（`codemirror.ts:66-77`），WYSIWYG 一个都没接。
   「屏幕上什么样导出就什么样」此前**无内容可依**。**切片 ① 已补上（§3.11）。**
@@ -447,6 +455,13 @@ import 过 `@codemirror/*`。理由是 `MarkdownEditorHandle` 故意比两个引
 - **只存在于 CSS 级联里的半边**（`var()`）：jsdom 不解析自定义属性，写不出行为测试。
   退而求其次断言**文件内容**（规则存在），并在注释里讲清为什么只能做到这一步 ——
   比假装它被覆盖了强。
+- **要给一个模块立规矩（「这里不许 import X」）** → 别比对依赖清单，**走 import 图**：从入口出发，
+  正则抓说明符（`/(?:from|import)\s*\(?\s*["']([^"']+)["']/g` 能同时捞到静态与动态两种），相对的
+  按文件解析、BFS，裸的只收集不解析。清单会漏掉刚加的那一行，import 图不会
+  （`packages/core/tests/document-subpath.test.ts`，§3.12）。
+- **「没有发生的事」也要断言**：假适配器把每次调用记进数组，然后断言它**是空的**（比如远程图片
+  「没有被去取」、未知扩展名「没有被打开」）。这类断言钉的是意图，比断言结果更难得 ——
+  结果对了但顺手多读一次文件，只有它看得见（§3.12）。
 
 ### 3.11 M6 第 ① 片：正文样式表 `core/src/document.css`（`475c42f`）
 
@@ -490,6 +505,61 @@ jsdom 不跑层叠，所以这一片的可测部分是这样切的：
 **验过 `@import` 真能穿过去**：Tailwind v4 + Vite 处理 CSS `@import` 是这一片唯一的机械风险（core 的
 CSS 文件在另一个包里）。`pnpm build` 之后在 `apps/desktop/dist/assets/index-*.css` 里数到 54 处
 `data-newmd-document`，搬过来的三块也都在 —— 不是推断，是数出来的。
+
+### 3.12 M6 第 ② 片：`packages/export` + `@newmd/core/document` + MD→HTML 序列化器（`08cbcb4` `240fd92` `cfbd7f6`）
+
+**做什么**：新包 `packages/export`，把一串 Markdown 变成**一个自包含的 HTML 文件**。三小片：
+
+- **②.1**（`08cbcb4`）—— 包起壳、core 开 `@newmd/core/document` 这道窄门、`renderDocumentHtml` 写出
+  正文结构（标题带位置 id、`[TOC]` 展开、表格对齐、脚注、front matter 面板、Shiki 上色的围栏块），
+  四份 CSS 内联成 `<style>`，**调色板从 ui 搬进 `core/src/theme.css`**（导出不能依赖 `packages/ui` ——
+  为了一个十六进制色去 import 一个 React 组件包，就是把导出变回「应用的一次构建」）。
+- **②.2**（`240fd92`）—— 两个要带资源的渲染器跑起来。KaTeX：`?raw` 读样式表（`?inline` 会被 Vite 把
+  `url()` 改写成构建产物引用，而读这份页面的机器上没有那个构建），20 个 woff2 用**显式 import** 收
+  （`import.meta.glob` 进不去 `node_modules`，实测 0 条），`core/src/document/katex-assets.ts` 把
+  60 处 `url(fonts/…)` 换成 data URI。Mermaid：从 `editor/mermaid.ts` 抽出 `renderMermaid(source, dark)`，
+  **编辑器与导出共用**，导出侧写编辑器写的同一个 `data-rendered`。
+- **②.3**（`cfbd7f6`）—— 图片读字节写进页面（`src/images.ts`），新增 `docPath` 选项与四种失败理由。
+
+**六条要记住的形状**：
+
+1. **`packages/export` 的依赖恰好两个**：`@newmd/core` 的公共 barrel 与 `@newmd/core/document`。
+   三个渲染器全走这道门，导出侧一个都不自己 import。**这道门有一条守卫测试**：
+   `packages/core/tests/document-subpath.test.ts` 走 **import 图**（相对说明符 BFS，连动态 `import()`
+   也跟），因为门被拆掉的方式就是一次次「顺手再 re-export 一个东西」。
+2. **两处挂点缺一不可**：`data-theme` 在 `<html>` 上（`theme.css` / `highlight.css` 读它），正文元素带
+   `[data-newmd-document]`（§3.11 那个属性）。少任何一个，内联进去的规则**一条都不生效且不报错** ——
+   这是「导出物没样式」最可能的两种死法。
+3. **`page.css` 是导出独有的一段**（纸张、页边、打印规则），所以它留在 `packages/export` 而不是 core；
+   内联顺序是 `themeCss / pageCss / documentCss / highlightCss / lookCss`，公式出现过才追加 KaTeX。
+4. **公式按需有两个方向**：导出物不白带 395KB，应用入口分块也不白背它 —— `katexStylesheet()` 走
+   `import()` 而不是 re-export。
+5. **两份东西故意不画**：`definition`（链接定义是绑定不是内容）与**裸 `html`**（让文档把标记写进一个
+   别人从桌面打开的文件里，是转义问题反过来）。**这不是「所见即所得」的破例**：这份一致性指的是文档
+   **语义**由同一套渲染器画出来，不是编辑器里每个装饰都得跟着走。已记进 ADR-0005 §3。
+6. **图片四种理由 + `docPath`**：`remote`（URL 一律**不去取**）、`unresolved`（没保存过的文档没有目录
+   可相对）、`unreadable`（路径解析出来了、读失败）、`unknown-type`（data URI 必须带媒体类型，而
+   `application/octet-stream` 是个什么都画不出来的标签，所以类型在开文件**之前**由扩展名定下）。四种
+   都**保留作者原来的路径**并进 `report.images`，不猜也不留白（ADR-0003 §2.7 同一条原则）。`docPath`
+   形状照抄 `ImageTarget`；字节走平台适配器 `readBinaryFile`，导出包不碰文件系统、不 import Tauri。
+
+**这一片新撞出来的形状**：**`packages/export` 不能解析 `mermaid` / `katex`**（pnpm 严格 node_modules）——
+这不是障碍，正是 §2.4 那条「依赖只有两个」在类型检查阶段就替你执行的证据。探针因此挪回
+`packages/core` 里跑。
+
+**测试**：export `tests/html.test.ts`（26 条，全在一个文件里）。jsdom 够不到的地方是这样切的：
+
+- **能行为断言的是结构**：位置 id、`[TOC]` 的 `href` 与缩进变量、表格对齐、脚注、front matter 面板、
+  Shiki token 的颜色、图片 base64 **解码后逐字节比对**。
+- **只能断言文件内容的是样式**：stylesheets 被内联、`[data-newmd-document]` 在正文上、KaTeX 的
+  `.katex-mathml` 那条 `clip-path:inset(50%)` 在（KaTeX 每个公式发两遍，少了它公式印两遍）。
+- **只能钉失败那一支的是 Mermaid**：jsdom 里 Mermaid 起不来（要 `getBBox`，jsdom 没有布局），所以自动化
+  只能断言「画不出来就保留源码并标错」，画成功进手测清单。
+- **「不去做」也要断言**：远程图片与未知扩展名的用例断言 `asked`（假平台记下的读取请求）为空 ——
+  这条比断言结果更有价值，它钉的是「没有发生的事」。
+
+**记下来但没做**：跨文档相对链接在导出物里仍是相对路径（ADR-0005 §5 第 4 条）；任务列表勾选框仍是
+§3.11 那个缺口。
 
 ---
 
@@ -564,7 +634,7 @@ CSS 文件在另一个包里）。`pnpm build` 之后在 `apps/desktop/dist/asse
 
 ---
 
-## 6. M6「导出与体验」（**ADR-0005 已定案；① 已合入，② 起一行没写**）
+## 6. M6「导出与体验」（**ADR-0005 已定案；①② 已合入，③ 起一行没写**）
 
 > 设计全文：`docs/adr/0005-export-and-experience.md`。**动手前读它，别读这一节。**
 > 交付物 = HTML / PDF / DOCX / Markdown 四种导出、专注模式、打字机模式、拼写检查**开关**、打包安装
@@ -573,17 +643,17 @@ CSS 文件在另一个包里）。`pnpm build` 之后在 `apps/desktop/dist/asse
 
 **切片的次序**（ADR-0005 §2.15）：
 
-| #   | 切片                                                                        | 为什么在这个位置                                     |
-| --- | --------------------------------------------------------------------------- | ---------------------------------------------------- |
-| ①   | ✅ 正文样式表（`core/src/document.css` + ui 接上 + 搬 front matter 那几段） | 同时是 HTML 导出的输入与专注模式的前提（§3.11）      |
-| ②   | `packages/export` 起壳 + `@newmd/core/document` + MD→HTML 序列化器          | 定形状：渲染器怎么复用、CSS 怎么内联、图片怎么内联   |
-| ③   | HTML 导出的通路（工具栏「导出」下拉 + 保存对话框 + 写盘）                   | 让 ② 变成读者能按到的东西，也是 ④ 的基座             |
-| ④   | PDF（隐藏 iframe + 系统打印）                                               | 撞 ADR-0001 §5 唯一那条「中」风险，也是两条验收之一  |
-| ⑤   | Markdown + zip                                                              | 独立于 HTML 序列化器，最便宜的一条后端               |
-| ⑥   | DOCX                                                                        | 最大的一块，已知取舍                                 |
-| ⑦   | 专注模式 / 打字机模式                                                       | 与导出无关，唯一可以自由挪的两片                     |
-| ⑧   | 拼写检查开关                                                                | 一片，接上现成的通路（`setSpellcheck` 今天零调用方） |
-| ⑨   | 打包安装                                                                    | 收口（`pnpm tauri build` 从来没跑过）                |
+| #   | 切片                                                                        | 为什么在这个位置                                            |
+| --- | --------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| ①   | ✅ 正文样式表（`core/src/document.css` + ui 接上 + 搬 front matter 那几段） | 同时是 HTML 导出的输入与专注模式的前提（§3.11）             |
+| ②   | ✅ `packages/export` 起壳 + `@newmd/core/document` + MD→HTML 序列化器       | 定形状：渲染器怎么复用、CSS 怎么内联、图片怎么内联（§3.12） |
+| ③   | HTML 导出的通路（工具栏「导出」下拉 + 保存对话框 + 写盘）                   | 让 ② 变成读者能按到的东西，也是 ④ 的基座                    |
+| ④   | PDF（隐藏 iframe + 系统打印）                                               | 撞 ADR-0001 §5 唯一那条「中」风险，也是两条验收之一         |
+| ⑤   | Markdown + zip                                                              | 独立于 HTML 序列化器，最便宜的一条后端                      |
+| ⑥   | DOCX                                                                        | 最大的一块，已知取舍                                        |
+| ⑦   | 专注模式 / 打字机模式                                                       | 与导出无关，唯一可以自由挪的两片                            |
+| ⑧   | 拼写检查开关                                                                | 一片，接上现成的通路（`setSpellcheck` 今天零调用方）        |
+| ⑨   | 打包安装                                                                    | 收口（`pnpm tauri build` 从来没跑过）                       |
 
 **形状一句话**：四条后端**共用一棵 mdast** —— 输入统一是 `getContent()` 那串 Markdown，导出侧自己
 parse（复用 core 已定的 remark 链）。HTML 是自包含单文件（CSS 内联、图片 base64、公式按需带 KaTeX
@@ -592,11 +662,13 @@ Markdown 是原文 + 图片打 zip。
 
 **必须记住的四件事**：
 
-1. **`packages/export` 今天不存在**，一行都没有；`docx` 与任何 zip 库也都不在依赖树里（两个新依赖）。
-   ② 号切片要的内联 CSS 已经有了：`packages/core/src/document.css`，`?inline` 取它（§3.11）。
-2. **core 的 barrel 故意够不到 remark 链** —— 要开 `@newmd/core/document` 这个窄 subpath，并配一条
-   测试钉住「它只导出文档侧，不导出引擎」，否则它会慢慢长成第二个 `editor/`。
-3. **导出 HTML 要复用 §3.5 那套 Shiki**：`highlight(code, lang)` 返回的 `{ offset, text, style }[]` 与
+1. **`packages/export` 已经在了**（② 号切片），HTML 后端就是 `renderDocumentHtml(markdown, options)`
+   —— ③ 号切片要做的就是把它接到工具栏与保存对话框上。`docx` 与任何 zip 库仍不在依赖树里
+   （两个新依赖）。图片写盘的通路走平台适配器（`writeBinaryFile`），别在 UI 里直接碰 Tauri 插件。
+2. **core 的 barrel 故意够不到 remark 链** —— 已经开了 `@newmd/core/document`，守卫测试是
+   `packages/core/tests/document-subpath.test.ts`（走 import 图）。往里加东西前先读它，加完在
+   `EXPECTED_FILES` 里登记。
+3. **导出 HTML 复用的是 §3.5 那套 Shiki**：`highlight(code, lang)` 返回的 `{ offset, text, style }[]` 与
    编辑器形状无关，直接可用。**别**在导出侧重新 `import("shiki")` 一套自己的 tokenizer（两边迟早分叉）。
    代码块**不需要带 CSS**（颜色已经写在每个 token 的行内 style 上），只差 `highlight.css` 那一行。
 4. **主题跟随当前、写死一份**；`[TOC]` 展开成 `<a href="#newmd-h-N">`，标题一律发位置 id。
@@ -609,16 +681,17 @@ ADR-0001 的 §2.7、§4、§6 未决问题 3/4 与 ADR-0002 的 §2.8、§3、�
 ## 7. 环境与命令（Windows 本机，踩过的坑）
 
 ```bash
-pnpm test                                   # 全仓测试（core + ui）
-pnpm typecheck                              # 三处 tsc --noEmit
+pnpm test                                   # 全仓测试（core + ui + export）
+pnpm typecheck                              # 四处 tsc --noEmit
 # prettier：packages 与 docs 两处都要查（docs 里的表格 prettier 会重排）
 node node_modules/prettier/bin/prettier.cjs --check "packages/**/*.{ts,tsx,md,css}" "docs/**/*.md"
 
 # 单跑一个包 / 一个文件（包内 vitest，别用 npx）
 # ⚠️ 必须**先 cd 进包**，不能从仓库根加 --root：highlight.test.ts 与 toc-block.test.ts
 #    按 cwd 读 CSS，cwd 在包外时这两条会挂。
-cd packages/core && node node_modules/vitest/vitest.mjs run tests/local-image.test.ts
-cd packages/ui   && node node_modules/vitest/vitest.mjs run tests/insert-image.test.tsx
+cd packages/core   && node node_modules/vitest/vitest.mjs run tests/local-image.test.ts
+cd packages/ui     && node node_modules/vitest/vitest.mjs run tests/insert-image.test.tsx
+cd packages/export && node node_modules/vitest/vitest.mjs run tests/html.test.ts
 
 cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml
 pnpm build                                  # vite 产物体检
@@ -661,6 +734,10 @@ the fence` 报 `expected 0 to be greater than 0`，而单跑这个文件 386ms �
   做完了、拼写检查的通路**零调用方**、E2E 对着五个 ✅ 里程碑**从未跑过**、core 的 barrel 够不到
   remark 链。四处都是「文档说 A、代码是 B」，而**照着文档做会白做功**。核现场的成本是几条
   `grep` / `ls`，收益是整片工作不白做。
+- **Vite 的 `?inline` 会把样式表里的 `url()` 改写掉**：拿 `katex/dist/katex.min.css?inline` 得到的是
+  `url(/@fs/…)` 或构建产物的资源链接，而读导出页面的机器上没有那个构建 —— 要**原样**的文本就用
+  `?raw`。同理 **`import.meta.glob` 进不去 `node_modules`**（实测 0 条），KaTeX 那 20 个字体只能一行行
+  显式 import。两条都是「看起来更优雅的写法在这里恰好不成立」。
 - **CodeMirror 的多选区是 opt-in，而且是静默的**：`EditorState.allowMultipleSelections` 没开时
   `applyTransaction` 会把 `tr.newSelection` 收敛成一个范围 —— **在造出这个范围的同一个 transaction
   里**。所以症状不是报错，是「手势没反应/只生效一半」（§3.8、ADR-0004 §1）。同类要先查的还有
@@ -679,8 +756,8 @@ the fence` 报 `expected 0 to be greater than 0`，而单跑这个文件 386ms �
    - 状态栏在 WYSIWYG 里报的是**文档文本**的行列，不是源码行列（`changeWatcher` 注释写明了理由）。
 4. **不要动 locale JSON 的结构**（两套 key 必须同构、按字母序），也不要在源码里塞裸文案。
 5. **不要在这三类未选工作里顺手推进**：E2E/Playwright、§5.2 小修、§5.3 文档合规 ——
-   除非用户明确改主意。**§4 的 7 项功能缺口已经全部收口，M6 的 ① 号切片也已合入（§3.11）**，
-   所以下一件该做的是 **M6 的 ② 号切片：`packages/export` 起壳 + `@newmd/core/document` 窄 subpath
-   - MD→HTML 单文件序列化器**（§6 的表），不是补 WYSIWYG 多光标（ADR-0004 明确不做），
-     也不是回头去动 §3.8 那三个 Alt 手势。
+   除非用户明确改主意。**§4 的 7 项功能缺口已经全部收口，M6 的 ①② 号切片也已合入（§3.11、§3.12）**，
+   所以下一件该做的是 **M6 的 ③ 号切片：HTML 导出的通路**（工具栏「导出」下拉 + 保存对话框 + 写盘，
+   接上 ② 已经写好的 `renderDocumentHtml`；§6 的表），不是补 WYSIWYG 多光标（ADR-0004 明确不做），
+   也不是回头去动 §3.8 那三个 Alt 手势。
 6. **不要把本机绝对路径写进任何仓库文件**（public 仓库）。
